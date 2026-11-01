@@ -36,3 +36,5 @@ Limites : pas d’audit WCAG complet, Safari/Firefox ou Lighthouse. Les tests ne
 La configuration Supabase et les variables d’exemple sont inchangées ; aucune requête, migration, suppression ou modification de table n’a eu lieu. Les identifiants produits, prix et quantités de démonstration sont conservés ; seul le nom d’affichage SHENA Studio devient SHENA Digital.
 
 Branche dédiée : `feat/shena-marketplace-redesign`, basée sur `feat/shena-storefront` (branche distante disponible). Le descriptif de PR se trouve dans `docs/pull-request-redesign.md`. Aucune fusion automatique ni commande de déploiement n’est effectuée. Une éventuelle Preview automatique appartient à la configuration Vercel du dépôt et n’a pas été vérifiée ici.
+
+La branche a été publiée avec succès. L’ouverture effective d’une PR en brouillon via `gh pr create --base feat/shena-storefront --head feat/shena-marketplace-redesign` a été tentée, mais le proxy a refusé `api.github.com/graphql` (Forbidden). Aucune PR n’a donc été créée par l’agent ; elle peut être ouverte depuis GitHub avec ces branches et le descriptif fourni.
