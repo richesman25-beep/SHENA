@@ -1,24 +1,27 @@
+import { CatalogStatus } from "@/components/catalog-status";
+import { loadCatalog } from "@/lib/supabase/catalog";
 import { VariantSelection } from "@/components/variant-selection";
 import { ProductAvailability } from "@/components/product-availability";
 import { ProductGallery } from "@/components/product-gallery";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { categories, products, money, typeLabel } from "@/lib/catalog";
+import { categories, money, typeLabel } from "@/lib/catalog";
 import { Purchase } from "@/components/purchase";
 import { ProductCard } from "@/components/product-card";
-export function generateStaticParams() {
-  return products.map((p) => ({ slug: p.slug }));
-}
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
+  const { products, status } = await loadCatalog();
   const { slug } = await params;
   const product = products.find((p) => p.slug === slug);
   return {
-    title: product?.name || "Produit introuvable",
+    title:
+      status !== "ready"
+        ? "Catalogue indisponible"
+        : product?.name || "Produit introuvable",
     description: product?.description,
   };
 }
@@ -27,10 +30,19 @@ export default async function Detail({
 }: {
   params: Promise<{ slug: string }>;
 }) {
+  const { products, status } = await loadCatalog();
   const { slug } = await params;
+  if (status !== "ready")
+    return (
+      <div className="shell">
+        <CatalogStatus />
+      </div>
+    );
   const p = products.find((p) => p.slug === slug);
   if (!p) notFound();
-  const category = categories.find((c) => c.slug === p.category)!;
+  const category = categories.find((c) => c.slug === p.category) || {
+    name: p.categoryLabel || "Autres produits",
+  };
   return (
     <div className="shell">
       <nav className="breadcrumb" aria-label="Fil d’Ariane">
@@ -49,10 +61,19 @@ export default async function Detail({
         <span>{p.name}</span>
       </nav>
       <div className="product-detail">
-        <ProductGallery image={p.image} name={p.name} />
+        <ProductGallery
+          image={p.image}
+          name={p.name}
+          url={p.imageUrl}
+          live={p.source === "supabase"}
+        />
         <div className="detail-copy">
           <span className={`badge static ${p.type}`}>
-            {p.type === "stock" ? "Stock de démonstration" : typeLabel(p.type)}
+            {p.type === "stock"
+              ? p.source === "supabase"
+                ? "Stock global"
+                : "Stock de démonstration"
+              : typeLabel(p.type)}
           </span>
           <p className="eyebrow">
             {p.brand} / {category.name}
@@ -67,7 +88,10 @@ export default async function Detail({
           </ul>
           {p.type === "stock" && (
             <p className="stock-note">
-              {p.stock} unités fictives disponibles · stock de démonstration
+              {p.stock}{" "}
+              {p.source === "supabase"
+                ? "unités en stock global"
+                : "unités fictives disponibles · stock de démonstration"}
             </p>
           )}
           {p.lead && (
@@ -79,15 +103,18 @@ export default async function Detail({
             <dl className="digital-specs">
               <div>
                 <dt>Format</dt>
-                <dd>{p.formats}</dd>
+                <dd>{p.formats || "Non renseigné"}</dd>
               </div>
               <div>
                 <dt>Taille</dt>
-                <dd>{p.size}</dd>
+                <dd>{p.size || "Non renseignée"}</dd>
               </div>
               <div>
                 <dt>Licence</dt>
-                <dd>{p.license}</dd>
+                <dd>
+                  {p.license ||
+                    "Conditions à renseigner avant commercialisation"}
+                </dd>
               </div>
               <div>
                 <dt>Accès</dt>
@@ -98,7 +125,7 @@ export default async function Detail({
               </div>
             </dl>
           )}
-          <VariantSelection image={p.image} />
+          {!p.source && <VariantSelection image={p.image} />}
           <ProductAvailability product={p} detail />
           <Purchase product={p} />
           <details>

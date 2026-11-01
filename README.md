@@ -71,3 +71,15 @@ L’accueil et le header sont reconstruits avec Manrope locale et la palette ble
 - `docs/proposals/` : schéma SQL et reprise du stock, uniquement à examiner avant toute autorisation d’exécution.
 
 La préférence locale `shena.location.v1` peut être modifiée ou effacée via le sélecteur. Les produits numériques restent sans frais ni transport physique. Sans règle validée : « Livraison et tarif à confirmer ».
+
+## Préparation production : Supabase et administration
+
+**Le mode par défaut est maintenant `live`.** Sans les deux variables publiques de `.env.example`, le catalogue explique sa configuration manquante et n'affiche aucun exemple comme produit réel. `SHENA_CATALOG_MODE=demo` est un choix explicite de revue/test, avec ses mentions de démonstration. Les tests navigateur de démo démarrent leur propre serveur dans ce mode ; `npm run test:e2e:live` vérifie le mode réel sans configuration. Les deux suites doivent se lancer séparément, sans serveur existant sur le port 3000.
+
+- [Audit des branches et fonctions](docs/production-audit.md).
+- [Configuration précise Vercel/Codex et validation en lecture seule](docs/production-setup.md).
+- [Propositions SQL et sauvegarde/restauration préalable](docs/proposals/production-rollout.md).
+
+L'administration `/admin` est vérifiée côté serveur, sans compte fictif ni mot de passe intégré. Les formulaires sont préparés mais les écritures restent bloquées tant que les capacités/politiques n'ont pas été approuvées et installées. Aucun service_role n'est utilisé. Les uploads d'images sont décodés et réencodés ; les fichiers numériques restent en quarantaine privée (PDF, 2 Mo maximum pour cette première phase, compatible avec la limite de requête prévue). Aucun téléchargement payant ni commande réelle n'est activé.
+
+Les instructions historiques de démonstration et propositions antérieures restent dans le dépôt pour préserver l'historique ; le plan production ci-dessus fait autorité pour cette nouvelle phase. Ne pas appliquer ensemble les SQL historiques et ceux de cette mission sans consolidation et approbation. Aucune migration ne s'exécute au build ou à l'installation.

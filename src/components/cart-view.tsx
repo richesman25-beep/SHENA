@@ -2,11 +2,15 @@
 import { CartShippingPreview } from "./cart-shipping-preview";
 import { ProductVisual } from "./product-visual";
 import Link from "next/link";
+import { CatalogStatus } from "./catalog-status";
+import { useCatalog } from "./catalog-provider";
 import { useCart } from "./cart-provider";
-import { products, money, typeLabel } from "@/lib/catalog";
+import { money, typeLabel } from "@/lib/catalog";
 import { cartTotal } from "@/lib/cart";
 export function CartView() {
+  const { products, mode, status } = useCatalog();
   const { lines, ready, update } = useCart();
+  if (status !== "ready") return <CatalogStatus />;
   if (!ready) return <p role="status">Chargement du panier…</p>;
   if (!lines.length)
     return (
@@ -32,7 +36,12 @@ export function CartView() {
           return (
             <article className="cart-line" key={line.id}>
               <Link href={`/produit/${p.slug}`}>
-                <ProductVisual image={p.image} name={p.name} />
+                <ProductVisual
+                  image={p.image}
+                  name={p.name}
+                  url={p.imageUrl}
+                  live={p.source === "supabase"}
+                />
               </Link>
               <div>
                 <span className="eyebrow">{typeLabel(p.type)}</span>
@@ -70,11 +79,11 @@ export function CartView() {
       </div>
       <aside className="cart-summary">
         <h2>Votre récapitulatif</h2>
-        <CartShippingPreview lines={lines} />
+        {mode === "demo" && <CartShippingPreview lines={lines} />}
         <dl>
           <div>
             <dt>Sous-total indicatif</dt>
-            <dd>{money(cartTotal(lines))}</dd>
+            <dd>{money(cartTotal(lines, products))}</dd>
           </div>
           <div>
             <dt>Livraison physique</dt>

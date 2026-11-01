@@ -63,7 +63,7 @@ test("numérique, confidentialité et routes non implémentées", async ({
   await expect(page.locator("a[download]")).toHaveCount(0);
   await page.goto("/admin");
   await expect(page.getByRole("heading", { level: 1 })).toContainText(
-    "Cette page reste à découvrir",
+    "Administration indisponible",
   );
   await page.goto("/informations/confidentialite");
   await expect(page.locator("main")).toContainText("stockage local");
@@ -184,4 +184,22 @@ test("galerie, visuels chargés et liens internes", async ({
     const response = await request.get(href);
     expect(response.status(), href).toBe(200);
   }
+});
+
+test("ancien panier démo conservé sans mélanger les identifiants réels", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    if (!localStorage.getItem("shena.cart.v1.demo"))
+      localStorage.setItem(
+        "shena.cart.v1",
+        JSON.stringify([{ id: "planner-demo", quantity: 1 }]),
+      );
+  });
+  await page.goto("/panier");
+  await expect(page.locator(".cart-line")).toHaveCount(1);
+  await expect(page.locator(".cart-line")).toContainText(
+    "Mon planner essentiel",
+  );
+  await expect(page.locator(".cart-summary")).toContainText("650 HTG");
 });

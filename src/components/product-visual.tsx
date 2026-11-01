@@ -13,12 +13,41 @@ export function ProductVisual({
   name,
   priority = false,
   alternate = false,
+  url,
+  live = false,
 }: {
   image: string;
   name: string;
   priority?: boolean;
   alternate?: boolean;
+  url?: string;
+  live?: boolean;
 }) {
+  if (live) {
+    return (
+      <div className="studio-visual real-product-image">
+        {url ? (
+          <Image
+            src={url}
+            alt={name}
+            fill
+            sizes="(max-width:640px) 50vw, 25vw"
+            unoptimized
+            style={{ objectFit: "contain" }}
+            priority={priority}
+          />
+        ) : (
+          <div
+            className="image-placeholder"
+            role="img"
+            aria-label={`Image indisponible : ${name}`}
+          >
+            Visuel non renseigné
+          </div>
+        )}
+      </div>
+    );
+  }
   const cell = positions[image];
   if (!cell)
     return (

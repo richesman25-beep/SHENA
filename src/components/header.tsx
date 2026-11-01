@@ -1,11 +1,12 @@
 "use client";
 import Link from "next/link";
-import { categories } from "@/lib/catalog";
+import { useCatalog } from "./catalog-provider";
 import { storefront } from "@/lib/storefront";
 import { useCart } from "./cart-provider";
 import { LocationPicker } from "./location-picker";
 import { Icon } from "./icons";
 export function Header() {
+  const { mode, categories } = useCatalog();
   const { lines, ready } = useCart();
   return (
     <>
@@ -107,7 +108,11 @@ export function Header() {
         <LocationPicker compact />
         <span>Stocks de démonstration · Sans GPS</span>
       </div>
-      <div className="demo-strip">{storefront.disclaimer}</div>
+      <div className="demo-strip">
+        {mode === "demo"
+          ? storefront.disclaimer
+          : "Mode catalogue réel · Commandes et paiements indisponibles · Géographie en préparation"}
+      </div>
     </>
   );
 }

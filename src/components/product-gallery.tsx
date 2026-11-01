@@ -4,9 +4,13 @@ import { ProductVisual } from "./product-visual";
 export function ProductGallery({
   image,
   name,
+  url,
+  live = false,
 }: {
   image: string;
   name: string;
+  url?: string;
+  live?: boolean;
 }) {
   const [alternate, setAlternate] = useState(false);
   const [zoom, setZoom] = useState(false);
@@ -14,6 +18,8 @@ export function ProductGallery({
     <div className="detail-image">
       <div className={`gallery-stage ${zoom ? "is-zoomed" : ""}`}>
         <ProductVisual
+          url={url}
+          live={live}
           image={image}
           name={name}
           priority
@@ -30,7 +36,7 @@ export function ProductGallery({
         >
           Vue produit
         </button>
-        {image !== "planner" && image !== "template" && (
+        {!live && image !== "planner" && image !== "template" && (
           <button
             aria-pressed={alternate && !zoom}
             onClick={() => {
@@ -46,10 +52,14 @@ export function ProductGallery({
         </button>
       </div>
       <span>
-        {image === "planner" || image === "template"
-          ? "Aperçu de couverture"
-          : "Visuel généré"}{" "}
-        · Démonstration · Image non contractuelle
+        {live
+          ? "Image du catalogue"
+          : image === "planner" || image === "template"
+            ? "Aperçu de couverture"
+            : "Visuel généré"}{" "}
+        {live
+          ? "· Agrandir le visuel pour examiner le produit"
+          : "· Démonstration · Image non contractuelle"}
       </span>
     </div>
   );

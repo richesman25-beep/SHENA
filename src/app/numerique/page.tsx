@@ -1,3 +1,4 @@
+import { loadCatalog } from "@/lib/supabase/catalog";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Catalog } from "@/components/catalog";
@@ -12,6 +13,7 @@ export default async function Digital({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const { mode } = await loadCatalog();
   const filters = readFilters(await searchParams);
   return (
     <div className="shell">
@@ -60,8 +62,9 @@ export default async function Digital({
       <div className="digital-catalog-heading" id="catalogue-numerique">
         <h2>Les ressources à découvrir</h2>
         <p>
-          Deux exemples disponibles dans ce catalogue. Les autres univers seront
-          enrichis avant lancement.
+          {mode === "demo"
+            ? "Deux exemples disponibles dans ce catalogue. Les autres univers seront enrichis avant lancement."
+            : "Produits numériques actifs du catalogue. Les formats et licences non renseignés devront être complétés avant commercialisation."}
         </p>
         <p>
           Format, licence et aperçu sur chaque fiche. Aucun paiement ni

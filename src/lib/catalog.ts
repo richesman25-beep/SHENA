@@ -37,13 +37,19 @@ export const categories = [
     color: "#e1dff0",
   },
 ] as const;
-export type Category = (typeof categories)[number]["slug"];
+export type Category = string;
 export type Product = {
   id: string;
   slug: string;
   name: string;
   category: Category;
-  type: "stock" | "preorder" | "digital";
+  type: "stock" | "preorder" | "digital" | "unknown";
+  source?: "supabase";
+  stockKnown?: boolean;
+  imageUrl?: string;
+  createdAt?: string;
+  categoryIds?: string[];
+  categoryLabel?: string;
   price: number;
   stock: number;
   brand: string;
@@ -216,12 +222,13 @@ export const products: Product[] = [
   },
 ];
 export const money = (value: number) =>
-  `${new Intl.NumberFormat("fr-HT", { maximumFractionDigits: 0 }).format(value)} HTG`;
+  `${new Intl.NumberFormat("fr-HT", { maximumFractionDigits: 2 }).format(value)} HTG`;
 export const typeLabel = (type: Product["type"]) =>
   ({
     stock: "En stock",
     preorder: "Sur commande",
     digital: "Produit numérique",
+    unknown: "Type à vérifier",
   })[type];
 export type Filters = {
   q?: string;
@@ -249,7 +256,9 @@ export function filterProducts(
   let found = source.filter(
     (p) =>
       (!q || normalize(`${p.name} ${p.description} ${p.brand}`).includes(q)) &&
-      (!input.category || p.category === input.category) &&
+      (!input.category ||
+        p.category === input.category ||
+        p.categoryIds?.includes(input.category)) &&
       (!input.type || p.type === input.type) &&
       (!input.brand || p.brand === input.brand) &&
       (!input.availability ||
@@ -267,7 +276,12 @@ export function filterProducts(
     found = [...found].sort((a, b) => a.price - b.price);
   if (input.sort === "price-desc")
     found = [...found].sort((a, b) => b.price - a.price);
-  if (input.sort === "newest") found = [...found].reverse();
+  if (input.sort === "newest")
+    found = [...found].sort((a, b) =>
+      a.createdAt && b.createdAt
+        ? b.createdAt.localeCompare(a.createdAt)
+        : source.indexOf(b) - source.indexOf(a),
+    );
   if (location && (!input.sort || input.sort === "nearby"))
     found = [...found].sort(
       (a, b) => geographicRank(a, location) - geographicRank(b, location),

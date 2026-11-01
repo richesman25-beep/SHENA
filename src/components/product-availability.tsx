@@ -18,6 +18,43 @@ export function ProductAvailability({
   detail?: boolean;
 }) {
   const { location } = useLocation();
+  if (product.source === "supabase")
+    return (
+      <section className={detail ? "availability-panel" : "card-geography"}>
+        {detail && (
+          <h2>
+            {product.type === "digital"
+              ? "Votre accès numérique"
+              : "Disponibilité et livraison"}
+          </h2>
+        )}
+        <p className="geo-label">
+          {product.type === "digital"
+            ? "Numérique · Sans livraison physique"
+            : product.type === "unknown"
+              ? "Type produit à vérifier"
+              : product.type === "preorder"
+                ? "Sur commande · Disponibilité à confirmer"
+                : product.stockKnown === false
+                  ? "Stock global non renseigné"
+                  : product.stock > 0
+                    ? `Stock global : ${product.stock} unité(s)`
+                    : "Rupture de stock"}
+        </p>
+        {detail && (
+          <>
+            <p className="delivery-pending">
+              {product.type === "digital"
+                ? "Accès après paiement vérifié : fonctionnalité à venir. Aucun téléchargement disponible."
+                : "Emplacements géographiques non renseignés. Livraison et tarif à confirmer."}
+            </p>
+            <small>
+              Les disponibilités locales ne sont pas déduites du stock global.
+            </small>
+          </>
+        )}
+      </section>
+    );
   const rank = geographicRank(product, location);
   const label = availabilityLabel(product, location);
   if (!detail)

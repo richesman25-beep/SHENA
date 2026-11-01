@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
-import { products } from "@/lib/catalog";
+import { loadCatalog } from "@/lib/supabase/catalog";
+import { CatalogStatus } from "@/components/catalog-status";
 import { ProductVisual } from "@/components/product-visual";
 import { ProductCard } from "@/components/product-card";
 import { ProductRail } from "@/components/product-rail";
@@ -44,9 +45,13 @@ const universes = [
     href: "/numerique",
   },
 ];
-export default function Home() {
+export default async function Home() {
+  const { products, mode } = await loadCatalog();
   return (
     <>
+      <div className="shell">
+        <CatalogStatus />
+      </div>
       <section className="premium-hero shell">
         <div className="hero-campaign">
           <Image
@@ -157,15 +162,13 @@ export default function Home() {
       </section>
       <ProductRail
         title="Nos dernières découvertes"
-        kicker="NOUVEAUTÉS DE DÉMONSTRATION"
+        kicker={
+          mode === "demo"
+            ? "NOUVEAUTÉS DE DÉMONSTRATION"
+            : "PRODUITS ACTIFS DU CATALOGUE"
+        }
         href="/boutique?sort=newest"
-        items={[
-          products[0],
-          products[1],
-          products[2],
-          products[5],
-          products[4],
-        ]}
+        items={products.slice(0, 5)}
       />
       <NearbyProducts />
       <section className="tech-destination">
@@ -180,7 +183,14 @@ export default function Home() {
             </Link>
           </div>
           <div className="tech-composition">
-            <Link href="/produit/enceinte-nomade" className="tech-feature">
+            <Link
+              href={
+                mode === "demo"
+                  ? "/produit/enceinte-nomade"
+                  : "/boutique?category=electronique"
+              }
+              className="tech-feature"
+            >
               <div>
                 <span>VOTRE MUSIQUE. VOTRE RYTHME.</span>
                 <h3>
@@ -233,7 +243,14 @@ export default function Home() {
               <h2>Vos petits rituels.</h2>
             </div>
           </div>
-          <Link href="/produit/rituel-douceur" className="beauty-feature">
+          <Link
+            href={
+              mode === "demo"
+                ? "/produit/rituel-douceur"
+                : "/boutique?category=beaute"
+            }
+            className="beauty-feature"
+          >
             <ProductVisual
               image="beauty"
               name="Rituel douceur de démonstration"
@@ -284,7 +301,12 @@ export default function Home() {
             .filter((p) => p.type === "digital")
             .map((p) => (
               <Link href={`/produit/${p.slug}`} key={p.id}>
-                <ProductVisual image={p.image} name={p.name} />
+                <ProductVisual
+                  image={p.image}
+                  name={p.name}
+                  url={p.imageUrl}
+                  live={p.source === "supabase"}
+                />
                 <div>
                   <span>{p.formats}</span>
                   <h3>{p.name}</h3>
