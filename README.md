@@ -1,5 +1,9 @@
 # SHENA
 
+## Une seule version de référence : main
+
+Le dépôt unique `richesman25-beep/SHENA` rassemble toutes les évolutions sur `main` : interface premium, SHENA Digital, localisation, catalogue Supabase et administration préparée. Les étapes précédentes sont conservées dans l’historique Git, pas dans des projets séparés. Pour la phase actuelle, lire [la configuration production](docs/production-setup.md) et [le rapport de validation](docs/production-validation.md).
+
 Première intervention : fondations et vitrine e-commerce en français, destinée au marché haïtien. Next.js App Router, React, TypeScript strict et Tailwind CSS. Tous les produits, stocks et prix sont **des données de démonstration**, les visuels sont des images studio générées et des couvertures numériques de démonstration.
 
 ## Démarrer
