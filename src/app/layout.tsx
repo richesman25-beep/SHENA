@@ -6,7 +6,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   metadataBase: new URL("https://shena.com"),
   title: {
-    default: "SHENA — Vos envies, votre quotidien.",
+    default: "SHENA — Tous vos univers, au même endroit.",
     template: "%s | SHENA",
   },
   description:
@@ -34,16 +34,16 @@ export default function RootLayout({
                   SHENA<span>•</span>
                 </Link>
                 <p>
-                  Des essentiels bien choisis.
+                  Tous vos univers.
                   <br />
-                  De nouvelles possibilités.
+                  Au même endroit.
                 </p>
                 <span className="eyebrow">Pensé pour Haïti · Prix en HTG</span>
               </div>
               <div>
                 <h2>Explorer</h2>
                 <Link href="/boutique">La boutique</Link>
-                <Link href="/numerique">L’univers numérique</Link>
+                <Link href="/numerique">SHENA Digital</Link>
                 <Link href="/boutique?type=preorder">Sur commande</Link>
               </div>
               <div>
@@ -67,9 +67,7 @@ export default function RootLayout({
             </div>
             <div className="shell footer-bottom">
               <span>© {new Date().getFullYear()} SHENA</span>
-              <span>
-                Illustrations originales · Produits et prix de démonstration
-              </span>
+              <span>Visuels, produits et prix de démonstration</span>
             </div>
           </footer>
         </CartProvider>

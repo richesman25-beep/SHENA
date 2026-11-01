@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { ProductGallery } from "@/components/product-gallery";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -47,16 +47,7 @@ export default async function Detail({
         <span>{p.name}</span>
       </nav>
       <div className="product-detail">
-        <div className="detail-image">
-          <Image
-            src={`/products/${p.image}.svg`}
-            alt={`Illustration du produit de démonstration ${p.name}`}
-            width={700}
-            height={700}
-            priority
-          />
-          <span>Illustration de démonstration — visuel non contractuel</span>
-        </div>
+        <ProductGallery image={p.image} name={p.name} />
         <div className="detail-copy">
           <span className={`badge static ${p.type}`}>{typeLabel(p.type)}</span>
           <p className="eyebrow">

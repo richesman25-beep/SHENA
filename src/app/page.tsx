@@ -1,94 +1,15 @@
-import Image from "next/image";
 import Link from "next/link";
 import { categories, products } from "@/lib/catalog";
+import { ProductVisual } from "@/components/product-visual";
+import { ProductRail } from "@/components/product-rail";
 import { ProductCard } from "@/components/product-card";
 import { Icon } from "@/components/icons";
 export default function Home() {
   return (
     <>
-      <section className="hero shell">
-        <div className="hero-copy">
-          <span className="eyebrow">
-            <span className="tiny-dot" /> LE QUOTIDIEN, AUTREMENT
-          </span>
-          <h1>
-            Vos envies.
-            <br />
-            Vos essentiels.
-            <br />
-            <em>Votre SHENA.</em>
-          </h1>
-          <p>
-            De la pièce qui vous ressemble à l’idée qui vous fait avancer.
-            Découvrez une sélection pensée pour votre quotidien, en Haïti.
-          </p>
-          <Link className="button" href="/boutique">
-            Explorer la boutique <Icon name="arrow" />
-          </Link>
-          <div className="hero-caption">
-            Mode · Tech · Beauté · Maison · Numérique
-          </div>
-        </div>
-        <div className="hero-art">
-          <div className="hero-art-title">
-            La sélection
-            <br />
-            <em>des beaux jours.</em>
-          </div>
-          <Image
-            className="hero-shoe"
-            src="/products/sneakers.svg"
-            alt="Illustration des sneakers SHENA de démonstration"
-            width={520}
-            height={520}
-            priority
-          />
-          <div className="hero-stamp">
-            SÉLECTION SHENA
-            <br />
-            <b>01 / 05</b>
-          </div>
-          <Link href="/produit/sneakers-shena-demo" className="hero-product">
-            <span>
-              Sneakers SHENA<small>Découvrir le modèle de démonstration</small>
-            </span>
-            <Icon name="arrow" />
-          </Link>
-        </div>
-      </section>
-      <div className="benefits shell">
-        <div>
-          <Icon name="truck" />
-          <span>
-            Livraison en Haïti
-            <small>Modalités à confirmer avant le lancement</small>
-          </span>
-        </div>
-        <div>
-          <Icon name="download" />
-          <span>
-            Un univers numérique<small>Des ressources pour vos projets</small>
-          </span>
-        </div>
-        <div>
-          <Icon name="check" />
-          <span>
-            Des informations claires
-            <small>Prix et disponibilité visibles</small>
-          </span>
-        </div>
-      </div>
-      <section className="section shell">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow">À CHAQUE ENVIE, SON UNIVERS</span>
-            <h2>Qu’allez-vous découvrir ?</h2>
-          </div>
-          <Link className="text-link" href="/boutique">
-            Tout explorer <Icon name="arrow" />
-          </Link>
-        </div>
-        <div className="category-grid">
+      <div className="shell campaign-layout">
+        <aside className="department-menu">
+          <h2>Explorez nos rayons</h2>
           {categories.map((c, i) => (
             <Link
               href={
@@ -96,135 +17,300 @@ export default function Home() {
                   ? "/numerique"
                   : `/boutique?category=${c.slug}`
               }
-              className="category-card"
               key={c.slug}
             >
-              <div style={{ background: c.color }}>
-                <Image
-                  src={`/products/${["bag", "headphones", "beauty", "vase", "planner"][i]}.svg`}
-                  alt=""
-                  width={240}
-                  height={240}
+              <span className="department-icon">
+                {["◈", "◉", "❋", "⌂", "✦"][i]}
+              </span>
+              {c.name}
+              <Icon name="arrow" />
+            </Link>
+          ))}
+          <div className="department-note">
+            <Icon name="truck" />
+            <p>
+              Pensé pour Haïti<small>Livraison : modalités à venir</small>
+            </p>
+          </div>
+        </aside>
+        <section className="main-campaign">
+          <div className="campaign-copy">
+            <span className="campaign-label">LES DÉCOUVERTES SHENA</span>
+            <h1>
+              Tout pour vous.
+              <br />
+              Tout pour votre
+              <br />
+              <em>quotidien.</em>
+            </h1>
+            <p>
+              Mode, tech, beauté et plus encore.
+              <br />
+              Vos univers préférés, au même endroit.
+            </p>
+            <Link className="button" href="/boutique">
+              Je découvre <Icon name="arrow" />
+            </Link>
+            <small>Une sélection de démonstration à explorer</small>
+          </div>
+          <div className="campaign-product">
+            <ProductVisual
+              image="headphones"
+              name="Casque sans fil de démonstration"
+              priority
+            />
+            <div className="campaign-product-label">
+              <span>LE SON, PARTOUT AVEC VOUS</span>
+              <strong>Casque sans fil Studio</strong>
+              <Link href="/produit/casque-sans-fil">
+                Découvrir le produit →
+              </Link>
+            </div>
+          </div>
+        </section>
+        <div className="side-campaigns">
+          <Link
+            href="/boutique?category=beaute"
+            className="side-campaign beauty-campaign"
+          >
+            <div>
+              <span>BEAUTÉ & SOINS</span>
+              <h2>
+                Votre moment
+                <br />à vous.
+              </h2>
+              <b>
+                Explorer <Icon name="arrow" />
+              </b>
+            </div>
+            <ProductVisual image="beauty" name="Soins de démonstration" />
+          </Link>
+          <Link href="/numerique" className="side-campaign digital-campaign">
+            <div>
+              <span>✦ SHENA DIGITAL</span>
+              <h2>
+                De grandes idées.
+                <br />
+                Les bons outils.
+              </h2>
+              <b>
+                Découvrir <Icon name="arrow" />
+              </b>
+            </div>
+            <div className="mini-document">
+              PDF
+              <br />
+              <strong>Aa</strong>
+              <i />
+              <i />
+            </div>
+          </Link>
+        </div>
+      </div>
+      <section className="market-section shell category-section">
+        <div className="section-heading">
+          <h2>À chaque envie, son rayon</h2>
+          <Link href="/boutique" className="text-link">
+            Toute la boutique <Icon name="arrow" />
+          </Link>
+        </div>
+        <div className="category-grid">
+          {categories.map((c, i) => (
+            <Link
+              className="category-card"
+              href={
+                c.slug === "numerique"
+                  ? "/numerique"
+                  : `/boutique?category=${c.slug}`
+              }
+              key={c.slug}
+            >
+              <div>
+                <ProductVisual
+                  image={
+                    ["sneakers", "headphones", "beauty", "vase", "planner"][i]
+                  }
+                  name={c.name}
                 />
-                <span>{c.mark}</span>
               </div>
-              <h3>
-                {c.name}
-                <Icon name="arrow" />
-              </h3>
+              <h3>{c.slug === "numerique" ? "SHENA Digital" : c.name}</h3>
+              <span>
+                {
+                  [
+                    "Votre style, vos essentiels",
+                    "Connectez votre quotidien",
+                    "Prenez soin de vous",
+                    "Bien chez vous",
+                    "Créez, apprenez, avancez",
+                  ][i]
+                }
+              </span>
             </Link>
           ))}
         </div>
       </section>
-      <section className="section shell">
-        <div className="section-heading">
+      <ProductRail
+        title="Les nouveautés à découvrir"
+        kicker="DU NOUVEAU DANS VOS RAYONS"
+        href="/boutique?sort=newest"
+        items={[...products].reverse().slice(0, 5)}
+      />
+      <div className="shell merchandising-banners">
+        <Link
+          href="/boutique?category=electronique"
+          className="wide-campaign tech-wide"
+        >
           <div>
-            <span className="eyebrow">LA SÉLECTION SHENA</span>
-            <h2>Des essentiels à découvrir.</h2>
+            <span className="eyebrow">ÉLECTRONIQUE & GADGETS</span>
+            <h2>
+              Le bon son.
+              <br />
+              Le bon compagnon.
+            </h2>
+            <span className="banner-cta">
+              Explorer la tech <Icon name="arrow" />
+            </span>
           </div>
-          <Link href="/boutique" className="text-link">
-            Voir le catalogue <Icon name="arrow" />
-          </Link>
-        </div>
-        <p className="section-intro">
-          Un premier aperçu de nos univers. Tous les articles présentés sont des
-          exemples de démonstration.
-        </p>
-        <div className="product-grid">
-          {products
-            .filter((p) => p.featured)
-            .slice(0, 4)
-            .map((p) => (
-              <ProductCard key={p.id} product={p} />
-            ))}
-        </div>
-      </section>
-      <section className="digital-banner shell">
-        <div className="digital-copy">
-          <span className="eyebrow">
-            SHENA STUDIO / LE DÉPARTEMENT NUMÉRIQUE
+          <ProductVisual image="speaker" name="Enceinte de démonstration" />
+        </Link>
+        <Link
+          href="/boutique?category=mode"
+          className="wide-campaign fashion-wide"
+        >
+          <div>
+            <span className="eyebrow">MODE & ACCESSOIRES</span>
+            <h2>
+              Votre style.
+              <br />
+              Sans compromis.
+            </h2>
+            <span className="banner-cta">
+              Trouver mon essentiel <Icon name="arrow" />
+            </span>
+          </div>
+          <ProductVisual image="bag" name="Sac de démonstration" />
+        </Link>
+      </div>
+      <ProductRail
+        title="Les essentiels de la sélection"
+        kicker="À EXPLORER EN CE MOMENT · SÉLECTION ÉDITORIALE"
+        href="/boutique"
+        items={products.filter((p) => p.featured).slice(0, 5)}
+      />
+      <section className="market-section shell digital-showcase">
+        <div className="digital-showcase-intro">
+          <span className="digital-wordmark">
+            SHENA <b>Digital</b>
+            <sup>✦</sup>
           </span>
           <h2>
-            Vos idées méritent
+            Vos projets prennent
             <br />
-            <em>de prendre forme.</em>
+            une nouvelle dimension.
           </h2>
           <p>
-            Planners, guides et modèles pratiques : découvrez des ressources
-            pour créer, apprendre et vous organiser.
+            E-books, planners, templates et ressources : des outils pour
+            apprendre, créer et avancer.
           </p>
-          <Link className="button light" href="/numerique">
-            Explorer les produits numériques <Icon name="arrow" />
-          </Link>
-          <small>Aperçus de démonstration · Téléchargements à venir</small>
-        </div>
-        <div className="digital-art">
-          <Image
-            src="/products/planner.svg"
-            alt="Aperçu illustré du planner essentiel"
-            width={450}
-            height={450}
-          />
-          <span className="format-tag">PDF · MODÈLES · RESSOURCES</span>
-        </div>
-      </section>
-      <section className="section shell">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow">POUR LA MAISON & POUR SOI</span>
-            <h2>Les petits détails qui comptent.</h2>
+          <div className="digital-feature-tags">
+            <span>PDF & e-books</span>
+            <span>Word & Excel</span>
+            <span>Planners & modèles</span>
           </div>
-          <Link className="text-link" href="/boutique?sort=newest">
-            Les nouveautés <Icon name="arrow" />
+          <Link href="/numerique" className="button">
+            Explorer SHENA Digital <Icon name="arrow" />
           </Link>
+          <small>
+            Aperçus de démonstration · Aucun téléchargement disponible
+          </small>
         </div>
-        <div className="product-grid">
+        <div className="digital-feature-products">
           {products
-            .filter((p) =>
-              [
-                "home-demo",
-                "beauty-demo",
-                "planner-demo",
-                "template-demo",
-              ].includes(p.id),
-            )
+            .filter((p) => p.type === "digital")
             .map((p) => (
-              <ProductCard key={p.id} product={p} />
+              <Link href={`/produit/${p.slug}`} key={p.id}>
+                <ProductVisual image={p.image} name={p.name} />
+                <span>
+                  {p.name} <Icon name="arrow" />
+                </span>
+              </Link>
             ))}
         </div>
       </section>
-      <section className="order-banner shell">
+      <div className="department-sections shell">
+        {categories
+          .filter((c) => c.slug !== "numerique")
+          .map((c) => {
+            const items = products.filter((p) => p.category === c.slug);
+            return (
+              <section className="department-section" key={c.slug}>
+                <div className="section-heading">
+                  <h2>{c.name}</h2>
+                  <Link
+                    className="text-link"
+                    href={`/boutique?category=${c.slug}`}
+                  >
+                    Tout voir <Icon name="arrow" />
+                  </Link>
+                </div>
+                <div className="department-products">
+                  {items.map((p) => (
+                    <ProductCard product={p} key={p.id} />
+                  ))}
+                  {items.length === 1 && (
+                    <div className={`department-discovery ${c.slug}`}>
+                      <span className="eyebrow">DÉCOUVREZ VOTRE UNIVERS</span>
+                      <h3>
+                        {c.slug === "beaute"
+                          ? "Les petits rituels font les belles journées."
+                          : "Du beau, du pratique. Tout simplement."}
+                      </h3>
+                      <p>
+                        {c.slug === "beaute"
+                          ? "Soins, beauté et moments pour soi. Un rayon qui se prépare pour vous."
+                          : "Des objets bien choisis pour se sentir bien chez soi."}
+                      </p>
+                      <Link
+                        className="text-link"
+                        href={`/boutique?category=${c.slug}`}
+                      >
+                        Explorer le rayon <Icon name="arrow" />
+                      </Link>
+                      <small>La sélection sera enrichie avant lancement.</small>
+                    </div>
+                  )}
+                </div>
+              </section>
+            );
+          })}
+      </div>
+      <ProductRail
+        title="À découvrir sur commande"
+        kicker="UN DÉLAI ANNONCÉ, UNE DISPONIBILITÉ À CONFIRMER"
+        href="/boutique?type=preorder"
+        items={products.filter((p) => p.type === "preorder")}
+      />
+      <section className="shell market-benefits">
         <div>
-          <span className="eyebrow">UNE AUTRE FAÇON DE CHOISIR</span>
-          <h2>
-            Votre prochain coup de cœur,
-            <br />
-            sur commande.
-          </h2>
-          <p>
-            Des articles à découvrir avec un délai annoncé et une disponibilité
-            à confirmer.
-          </p>
+          <Icon name="truck" />
+          <h3>Pensé pour Haïti</h3>
+          <p>Zones et frais de livraison à confirmer avant lancement.</p>
         </div>
-        <Link href="/boutique?type=preorder" className="button outline">
-          Découvrir la sélection <Icon name="arrow" />
-        </Link>
-      </section>
-      <section className="section shell story">
-        <span className="eyebrow">BIENVENUE DANS VOTRE QUOTIDIEN</span>
-        <h2>
-          Une boutique, plusieurs univers.
-          <br />
-          La même attention pour vous.
-        </h2>
-        <p>
-          SHENA se construit autour d’une idée simple : rendre les produits du
-          quotidien et les ressources numériques plus faciles à découvrir en
-          Haïti.
-        </p>
-        <Link className="text-link" href="/informations/a-propos">
-          L’esprit SHENA <Icon name="arrow" />
-        </Link>
+        <div>
+          <Icon name="download" />
+          <h3>Physique & numérique</h3>
+          <p>Vos essentiels et vos ressources, dans une même boutique.</p>
+        </div>
+        <div>
+          <Icon name="check" />
+          <h3>En toute transparence</h3>
+          <p>Catalogue de démonstration. Aucun achat ni paiement réel.</p>
+        </div>
+        <div>
+          <Icon name="bag" />
+          <h3>Un panier à votre rythme</h3>
+          <p>Conservez votre sélection sur cet appareil.</p>
+        </div>
       </section>
     </>
   );

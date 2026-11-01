@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { categories } from "@/lib/catalog";
+import { storefront } from "@/lib/storefront";
 import { useCart } from "./cart-provider";
 import { Icon } from "./icons";
 export function Header() {
@@ -8,43 +9,81 @@ export function Header() {
   return (
     <>
       <div className="announcement">
-        Bienvenue chez SHENA · Une nouvelle façon de découvrir, en Haïti.{" "}
-        <span>Catalogue de démonstration — achats indisponibles</span>
+        <div className="shell">
+          <span>{storefront.announcement}</span>
+          <span>Haïti · Français · HTG</span>
+        </div>
       </div>
       <header className="header shell">
         <Link href="/" className="logo" aria-label="SHENA, accueil">
-          SHENA<span>•</span>
+          SHENA<span>●</span>
+          <small>TOUT UN MONDE À DÉCOUVRIR</small>
         </Link>
         <form action="/boutique" className="header-search">
-          <label htmlFor="search" className="sr-only">
+          <label className="sr-only" htmlFor="search-category">
+            Catégorie de recherche
+          </label>
+          <select id="search-category" name="category">
+            <option value="">Tout</option>
+            {categories.map((c) => (
+              <option value={c.slug} key={c.slug}>
+                {c.short}
+              </option>
+            ))}
+          </select>
+          <label className="sr-only" htmlFor="search">
             Rechercher un produit
           </label>
-          <Icon name="search" />
-          <input id="search" name="q" placeholder="Une envie, un essentiel…" />
-          <button type="submit" aria-label="Lancer la recherche">
-            <Icon name="arrow" />
+          <input
+            id="search"
+            name="q"
+            placeholder="Rechercher un produit, une envie…"
+          />
+          <button aria-label="Lancer la recherche">
+            <Icon name="search" />
           </button>
         </form>
         <div className="header-actions">
-          <Link className="help-link" href="/informations/a-propos">
-            L’esprit SHENA
-          </Link>
+          <button
+            className="header-disabled"
+            disabled
+            title="Les comptes clients ne sont pas encore disponibles"
+          >
+            <Icon name="user" />
+            <span>
+              Mon compte<small>Bientôt disponible</small>
+            </span>
+          </button>
+          <button
+            className="header-disabled favorites"
+            disabled
+            title="Les favoris ne sont pas encore disponibles"
+          >
+            <Icon name="heart" />
+            <span>
+              Favoris<small>Bientôt</small>
+            </span>
+          </button>
           <Link
             className="bag-link"
             href="/panier"
             aria-label={`Panier, ${ready ? lines.reduce((s, l) => s + l.quantity, 0) : 0} articles`}
           >
-            <Icon name="bag" />
-            <span>Panier</span>
-            <b>{ready ? lines.reduce((s, l) => s + l.quantity, 0) : 0}</b>
+            <span className="bag-icon">
+              <Icon name="bag" />
+              <b>{ready ? lines.reduce((s, l) => s + l.quantity, 0) : 0}</b>
+            </span>
+            <span>
+              Mon panier<small>Votre sélection</small>
+            </span>
           </Link>
         </div>
       </header>
       <nav className="navigation" aria-label="Navigation principale">
         <div className="shell nav-inner">
-          <Link href="/boutique" className="all-categories">
+          <Link className="all-categories" href="/boutique">
             <Icon name="menu" />
-            Toute la boutique
+            Tous les rayons
           </Link>
           {categories.map((c) => (
             <Link
@@ -54,12 +93,15 @@ export function Header() {
                   ? "/numerique"
                   : `/boutique?category=${c.slug}`
               }
+              className={c.slug === "numerique" ? "nav-digital" : ""}
             >
-              {c.name}
+              {c.slug === "numerique" ? "✦ SHENA Digital" : c.name}
             </Link>
           ))}
+          <Link href="/boutique?type=preorder">Sur commande</Link>
         </div>
       </nav>
+      <div className="demo-strip">{storefront.disclaimer}</div>
     </>
   );
 }

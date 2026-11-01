@@ -1,5 +1,5 @@
 "use client";
-import Image from "next/image";
+import { ProductVisual } from "./product-visual";
 import Link from "next/link";
 import { useCart } from "./cart-provider";
 import { products, money, typeLabel } from "@/lib/catalog";
@@ -31,12 +31,7 @@ export function CartView() {
           return (
             <article className="cart-line" key={line.id}>
               <Link href={`/produit/${p.slug}`}>
-                <Image
-                  src={`/products/${p.image}.svg`}
-                  alt={p.name}
-                  width={125}
-                  height={125}
-                />
+                <ProductVisual image={p.image} name={p.name} />
               </Link>
               <div>
                 <span className="eyebrow">{typeLabel(p.type)}</span>

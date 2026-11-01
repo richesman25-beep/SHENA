@@ -139,7 +139,7 @@ export const products: Product[] = [
     type: "digital",
     price: 650,
     stock: 0,
-    brand: "SHENA Studio",
+    brand: "SHENA Digital",
     image: "planner",
     description:
       "Faites de la place à vos idées. Un planner à imprimer pour organiser semaines, projets et priorités.",
@@ -180,7 +180,7 @@ export const products: Product[] = [
     type: "digital",
     price: 950,
     stock: 0,
-    brand: "SHENA Studio",
+    brand: "SHENA Digital",
     image: "template",
     description:
       "Une mise en page claire pour présenter votre parcours et préparer votre prochaine candidature.",
