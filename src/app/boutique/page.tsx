@@ -19,7 +19,7 @@ export default async function Boutique({
         </p>
       </div>
       <div className="catalog-layout">
-        <Catalog filters={filters} />
+        <Catalog key={JSON.stringify(filters)} filters={filters} />
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 # SHENA
 
-Première intervention : fondations et vitrine e-commerce en français, destinée au marché haïtien. Next.js App Router, React, TypeScript strict et Tailwind CSS. Tous les produits, stocks et prix sont **des données de démonstration**, les visuels sont des illustrations originales SVG.
+Première intervention : fondations et vitrine e-commerce en français, destinée au marché haïtien. Next.js App Router, React, TypeScript strict et Tailwind CSS. Tous les produits, stocks et prix sont **des données de démonstration**, les visuels sont des images studio générées et des couvertures numériques de démonstration.
 
 ## Démarrer
 
@@ -40,7 +40,7 @@ Après installation du navigateur Playwright (`npx playwright install chromium`,
 - `src/lib/catalog.ts` : source de démonstration typée, catégories centralisées et filtrage.
 - `src/lib/cart.ts` : normalisation des données non fiables et calculs testables.
 - `src/lib/supabase/config.ts` : configuration et contrat de la table existante, sans connexion.
-- `public/products/` : illustrations locales originales, sans dépendance à un domaine d’images.
+- `public/products/` : planche studio générée locale et illustrations historiques ; recadrage et optimisation via ProductVisual / Next Image.
 - `docs/` : design, sécurité, schéma futur et déploiement.
 
 ## Supabase existant — aucune opération exécutée
@@ -54,3 +54,20 @@ Ne pas recréer/réinitialiser la base, désactiver RLS, supprimer des données 
 ## Suite du développement
 
 Voir `docs/architecture.md` pour le découpage et `docs/deployment.md` pour Vercel. Les phases 4 à 8 ne sont pas exécutées. Avant toute vente : catalogue et photos réels, conditions commerciales validées, tarifs de livraison, checkout transactionnel, autorisations, paiements vérifiés et livraison numérique privée testés. Aucune offre promotionnelle n’est inventée : le bloc d’offres sera activé uniquement avec de vraies conditions commerciales.
+
+## Refonte UI/UX
+
+Identité bleu nuit et orange, header marchand, campagnes et rayons compacts, ajouts au panier depuis les cartes et espace **SHENA Digital**. Voir `docs/design.md` et `docs/redesign.md`. Les données, le panier et le contrat Supabase sont conservés ; aucun accès réel à Supabase n’est activé.
+
+## Version premium et stocks multivilles
+
+L’accueil et le header sont reconstruits avec Manrope locale et la palette bleu/corail. La localisation manuelle et le filtre de proximité utilisent exclusivement des stocks fictifs. Référentiel de démonstration : dix départements et seize communes, couverture partielle explicitement affichée. Aucune intégration Supabase n’est activée.
+
+- `src/lib/geography.ts` : départements/communes et validation du choix.
+- `src/lib/logistics.ts` : inventaires fictifs, classement géographique, livraison non configurée et simulation d’origines.
+- `/gestion-stocks-demo` : atelier public de stocks, en mémoire uniquement ; aucune administration réelle.
+- `/mes-achats-numeriques` : information sur la future bibliothèque, sans achat simulé.
+- `docs/geography.md`, `docs/premium-design.md` : contrats, sources et limites.
+- `docs/proposals/` : schéma SQL et reprise du stock, uniquement à examiner avant toute autorisation d’exécution.
+
+La préférence locale `shena.location.v1` peut être modifiée ou effacée via le sélecteur. Les produits numériques restent sans frais ni transport physique. Sans règle validée : « Livraison et tarif à confirmer ».
