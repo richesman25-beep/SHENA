@@ -7,7 +7,7 @@
     "build": "next build --webpack",
     "start": "next start --hostname 0.0.0.0",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "test:e2e": "playwright test",
     "format": "prettier --write .",
@@ -19,7 +19,6 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
   "bugs": {
     "url": "https://github.com/richesman25-beep/SHENA/issues"
   },
