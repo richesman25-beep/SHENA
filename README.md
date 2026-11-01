@@ -58,3 +58,16 @@ Voir `docs/architecture.md` pour le découpage et `docs/deployment.md` pour Verc
 ## Refonte UI/UX
 
 Identité bleu nuit et orange, header marchand, campagnes et rayons compacts, ajouts au panier depuis les cartes et espace **SHENA Digital**. Voir `docs/design.md` et `docs/redesign.md`. Les données, le panier et le contrat Supabase sont conservés ; aucun accès réel à Supabase n’est activé.
+
+## Version premium et stocks multivilles
+
+L’accueil et le header sont reconstruits avec Manrope locale et la palette bleu/corail. La localisation manuelle et le filtre de proximité utilisent exclusivement des stocks fictifs. Référentiel de démonstration : dix départements et seize communes, couverture partielle explicitement affichée. Aucune intégration Supabase n’est activée.
+
+- `src/lib/geography.ts` : départements/communes et validation du choix.
+- `src/lib/logistics.ts` : inventaires fictifs, classement géographique, livraison non configurée et simulation d’origines.
+- `/gestion-stocks-demo` : atelier public de stocks, en mémoire uniquement ; aucune administration réelle.
+- `/mes-achats-numeriques` : information sur la future bibliothèque, sans achat simulé.
+- `docs/geography.md`, `docs/premium-design.md` : contrats, sources et limites.
+- `docs/proposals/` : schéma SQL et reprise du stock, uniquement à examiner avant toute autorisation d’exécution.
+
+La préférence locale `shena.location.v1` peut être modifiée ou effacée via le sélecteur. Les produits numériques restent sans frais ni transport physique. Sans règle validée : « Livraison et tarif à confirmer ».

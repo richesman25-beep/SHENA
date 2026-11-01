@@ -3,6 +3,7 @@ import Link from "next/link";
 import { categories } from "@/lib/catalog";
 import { storefront } from "@/lib/storefront";
 import { useCart } from "./cart-provider";
+import { LocationPicker } from "./location-picker";
 import { Icon } from "./icons";
 export function Header() {
   const { lines, ready } = useCart();
@@ -16,9 +17,10 @@ export function Header() {
       </div>
       <header className="header shell">
         <Link href="/" className="logo" aria-label="SHENA, accueil">
-          SHENA<span>●</span>
-          <small>TOUT UN MONDE À DÉCOUVRIR</small>
+          <span className="logo-symbol">S</span>SHENA<span>●</span>
+          <small>VOTRE MONDE. PLUS PROCHE.</small>
         </Link>
+        <LocationPicker />
         <form action="/boutique" className="header-search">
           <label className="sr-only" htmlFor="search-category">
             Catégorie de recherche
@@ -101,6 +103,10 @@ export function Header() {
           <Link href="/boutique?type=preorder">Sur commande</Link>
         </div>
       </nav>
+      <div className="location-mobile shell">
+        <LocationPicker compact />
+        <span>Stocks de démonstration · Sans GPS</span>
+      </div>
       <div className="demo-strip">{storefront.disclaimer}</div>
     </>
   );

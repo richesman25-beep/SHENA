@@ -12,10 +12,12 @@ export function ProductVisual({
   image,
   name,
   priority = false,
+  alternate = false,
 }: {
   image: string;
   name: string;
   priority?: boolean;
+  alternate?: boolean;
 }) {
   const cell = positions[image];
   if (!cell)
@@ -67,7 +69,11 @@ export function ProductVisual({
   return (
     <div className="studio-visual">
       <Image
-        src="/products/studio-collection.png"
+        src={
+          alternate
+            ? "/products/studio-alternate.png"
+            : "/products/studio-collection.png"
+        }
         alt={`Visuel généré de démonstration : ${name}`}
         width={1536}
         height={1024}

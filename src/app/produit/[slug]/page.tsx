@@ -1,3 +1,5 @@
+import { VariantSelection } from "@/components/variant-selection";
+import { ProductAvailability } from "@/components/product-availability";
 import { ProductGallery } from "@/components/product-gallery";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -49,7 +51,9 @@ export default async function Detail({
       <div className="product-detail">
         <ProductGallery image={p.image} name={p.name} />
         <div className="detail-copy">
-          <span className={`badge static ${p.type}`}>{typeLabel(p.type)}</span>
+          <span className={`badge static ${p.type}`}>
+            {p.type === "stock" ? "Stock de démonstration" : typeLabel(p.type)}
+          </span>
           <p className="eyebrow">
             {p.brand} / {category.name}
           </p>
@@ -94,6 +98,8 @@ export default async function Detail({
               </div>
             </dl>
           )}
+          <VariantSelection image={p.image} />
+          <ProductAvailability product={p} detail />
           <Purchase product={p} />
           <details>
             <summary>

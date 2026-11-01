@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 test("rechercher, filtrer et ouvrir une fiche", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toContainText(
-    "quotidien.",
+    "Plus près de vous.",
   );
   await page.getByLabel("Rechercher un produit").fill("casque");
   await page.getByRole("button", { name: "Lancer la recherche" }).click();
@@ -84,6 +84,9 @@ test("mobile sans débordement et parcours clavier", async ({ page }) => {
       "/numerique",
       "/produit/planner-essentiel",
       "/panier",
+      "/mes-achats-numeriques",
+      "/gestion-stocks-demo",
+      "/produit/casque-sans-fil",
     ]) {
       await page.goto(path);
       expect(

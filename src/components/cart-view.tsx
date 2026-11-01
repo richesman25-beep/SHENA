@@ -1,4 +1,5 @@
 "use client";
+import { CartShippingPreview } from "./cart-shipping-preview";
 import { ProductVisual } from "./product-visual";
 import Link from "next/link";
 import { useCart } from "./cart-provider";
@@ -69,6 +70,7 @@ export function CartView() {
       </div>
       <aside className="cart-summary">
         <h2>Votre récapitulatif</h2>
+        <CartShippingPreview lines={lines} />
         <dl>
           <div>
             <dt>Sous-total indicatif</dt>

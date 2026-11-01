@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { categories, money, type Product } from "@/lib/catalog";
 import { ProductVisual } from "./product-visual";
+import { ProductAvailability } from "./product-availability";
 import { QuickAdd } from "./quick-add";
 export function ProductCard({ product: p }: { product: Product }) {
   return (
@@ -14,7 +15,7 @@ export function ProductCard({ product: p }: { product: Product }) {
             ? "Numérique"
             : p.type === "preorder"
               ? "Sur commande"
-              : "Collection démo"}
+              : "Stock démo"}
         </span>
       </Link>
       <div className="product-card-body">
@@ -26,14 +27,7 @@ export function ProductCard({ product: p }: { product: Product }) {
           <Link href={`/produit/${p.slug}`}>{p.name}</Link>
         </h3>
         <p className="price">{money(p.price)}</p>
-        <p className={`availability ${p.type}`}>
-          <span />
-          {p.type === "digital"
-            ? "Aperçu · Livraison numérique à venir"
-            : p.type === "preorder"
-              ? "Disponibilité à confirmer"
-              : `Stock démo : ${p.stock} unités`}
-        </p>
+        <ProductAvailability product={p} />
         {p.type === "digital" && (
           <p className="card-license">Licence personnelle · {p.size}</p>
         )}

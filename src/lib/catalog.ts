@@ -1,3 +1,5 @@
+import { geographicRank } from "./logistics";
+import type { CustomerLocation } from "./geography";
 export const categories = [
   {
     slug: "mode",
@@ -121,7 +123,7 @@ export const products: Product[] = [
     stock: 0,
     brand: "SHENA",
     image: "bag",
-    lead: "Délai indicatif : 10 à 15 jours après confirmation",
+    lead: "Délai fournisseur à confirmer",
     description:
       "Des lignes sobres et un format pratique pour emporter vos essentiels.",
     details: [
@@ -203,7 +205,7 @@ export const products: Product[] = [
     stock: 0,
     brand: "Studio",
     image: "speaker",
-    lead: "Délai indicatif : 10 à 15 jours après confirmation",
+    lead: "Délai fournisseur à confirmer",
     description:
       "Un format compact pour donner le rythme à vos moments de détente.",
     details: [
@@ -231,8 +233,13 @@ export type Filters = {
   availability?: string;
   sort?: string;
   page?: string;
+  near?: string;
 };
-export function filterProducts(input: Filters, source: Product[] = products) {
+export function filterProducts(
+  input: Filters,
+  source: Product[] = products,
+  location: CustomerLocation | null = null,
+) {
   const normalize = (s: string) =>
     s
       .normalize("NFD")
@@ -252,11 +259,19 @@ export function filterProducts(input: Filters, source: Product[] = products) {
       (!input.min || p.price >= Number(input.min)) &&
       (!input.max || p.price <= Number(input.max)),
   );
+  if (input.near === "1" && location)
+    found = found.filter(
+      (p) => p.type === "digital" || geographicRank(p, location) === 0,
+    );
   if (input.sort === "price-asc")
     found = [...found].sort((a, b) => a.price - b.price);
   if (input.sort === "price-desc")
     found = [...found].sort((a, b) => b.price - a.price);
   if (input.sort === "newest") found = [...found].reverse();
+  if (location && (!input.sort || input.sort === "nearby"))
+    found = [...found].sort(
+      (a, b) => geographicRank(a, location) - geographicRank(b, location),
+    );
   const pageCount = Math.max(1, Math.ceil(found.length / 6));
   const page = Math.min(
     pageCount,
@@ -284,6 +299,7 @@ export function readFilters(
     "availability",
     "sort",
     "page",
+    "near",
   ] as const) {
     const value = input[key];
     if (typeof value === "string") result[key] = value.slice(0, 200);

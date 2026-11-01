@@ -2,20 +2,26 @@ export const storefront = {
   announcement: "Bienvenue sur SHENA : tous vos univers, au même endroit.",
   disclaimer: "Démonstration · Prix et stocks fictifs · Achats indisponibles",
   digitalTopics: [
+    { name: "E-books", description: "À lire et à découvrir", query: "ebook" },
     {
-      name: "E-books & guides",
-      description: "Lire, découvrir, apprendre",
+      name: "Guides PDF",
+      description: "Apprendre et passer à l’action",
       query: "guide",
     },
     {
       name: "Templates Canva",
-      description: "Donner forme à vos idées",
+      description: "Créer à votre image",
       query: "Canva",
     },
     {
-      name: "Word & Excel",
-      description: "Des modèles pour gagner du temps",
+      name: "Modèles Word",
+      description: "Présenter vos projets",
       query: "professionnel",
+    },
+    {
+      name: "Tableurs Excel",
+      description: "Organiser vos données",
+      query: "Excel",
     },
     {
       name: "Formations",
@@ -24,13 +30,23 @@ export const storefront = {
     },
     {
       name: "Planners",
-      description: "Organiser votre quotidien",
+      description: "Du temps pour vos priorités",
       query: "planner",
     },
     {
-      name: "Éducation & ressources",
-      description: "Accompagner vos projets",
+      name: "Packs de ressources",
+      description: "Tout pour commencer",
+      query: "pack",
+    },
+    {
+      name: "Documents éducatifs",
+      description: "Apprendre au quotidien",
       query: "éducatif",
+    },
+    {
+      name: "Autres fichiers",
+      description: "Explorer les ressources",
+      query: "",
     },
   ],
 };

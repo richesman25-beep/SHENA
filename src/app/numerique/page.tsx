@@ -12,6 +12,7 @@ export default async function Digital({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const filters = readFilters(await searchParams);
   return (
     <div className="shell">
       <section className="digital-hero">
@@ -21,9 +22,9 @@ export default async function Digital({
             <sup>✦</sup>
           </span>
           <h1>
-            Les bons outils.
+            Votre prochaine idée.
             <br />
-            Pour vos grandes idées.
+            Commence ici.
           </h1>
           <p>
             Créez, organisez, apprenez. Un univers de ressources numériques pour
@@ -33,7 +34,7 @@ export default async function Digital({
             Explorer les ressources →
           </a>
           <small>
-            SHENA STUDIO · Démonstration · Aucun téléchargement disponible
+            SHENA DIGITAL · Démonstration · Aucun téléchargement disponible
           </small>
         </div>
         <div className="digital-hero-covers">
@@ -47,12 +48,15 @@ export default async function Digital({
             href={`/numerique?q=${encodeURIComponent(t.query)}#catalogue-numerique`}
             key={t.name}
           >
-            <span>{["▤", "✦", "▦", "▷", "▣", "◈"][i]}</span>
+            <span>{["▤", "▧", "✦", "▦", "▥", "▷", "▣", "◈", "▤", "+"][i]}</span>
             <h2>{t.name}</h2>
             <p>{t.description}</p>
           </Link>
         ))}
       </section>
+      <Link href="/mes-achats-numeriques" className="library-link">
+        Mes achats numériques · Bibliothèque à venir →
+      </Link>
       <div className="digital-catalog-heading" id="catalogue-numerique">
         <h2>Les ressources à découvrir</h2>
         <p>
@@ -65,7 +69,7 @@ export default async function Digital({
         </p>
       </div>
       <div className="catalog-layout">
-        <Catalog digital filters={readFilters(await searchParams)} />
+        <Catalog key={JSON.stringify(filters)} digital filters={filters} />
       </div>
     </div>
   );
