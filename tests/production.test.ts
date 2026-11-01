@@ -43,6 +43,7 @@ test("adaptation des colonnes existantes sans stock géographique ni catégorie 
   assert.equal(p.source, "supabase");
   assert.equal(p.slug, record.id);
   assert.equal(p.category, "non-classe");
+  assert.equal(p.brand, "");
   assert.equal(p.imageUrl, undefined);
 });
 test("aucun produit inactif ni prix invalide dans le catalogue public", () => {

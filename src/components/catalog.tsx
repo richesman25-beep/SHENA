@@ -106,7 +106,8 @@ export function Catalog({
               ...new Set(
                 products
                   .filter((p) => !digital || p.type === "digital")
-                  .map((p) => p.brand),
+                  .map((p) => p.brand)
+                  .filter(Boolean),
               ),
             ].map((b) => (
               <option key={b}>{b}</option>

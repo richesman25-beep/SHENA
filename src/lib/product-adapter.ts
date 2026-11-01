@@ -58,7 +58,7 @@ export function adaptProduct(row: ExistingProduct): Product | null {
     stockKnown: row.stock !== null,
     type,
     category: type === "digital" ? "numerique" : "non-classe",
-    brand: "SHENA",
+    brand: "",
     image: "",
     imageUrl: safeImageUrl(row.image_url),
     source: "supabase",

@@ -40,3 +40,5 @@ Le brouillon cloud enregistre les exigences des deux variables publiques et les 
 ## Revue
 
 Branche de travail : feat/shena-supabase-admin. Base de revue : feat/shena-premium-local-commerce. Le descriptif se trouve dans docs/production-pr.md. Aucune fusion ni commande de déploiement n'a été lancée. Le statut réel de la création de PR est à distinguer de sa préparation.
+
+La branche feat/shena-supabase-admin a été publiée. L'ouverture effective d'une PR en brouillon vers feat/shena-premium-local-commerce a été tentée ; le proxy a refusé https://api.github.com/graphql (Forbidden). Aucune PR n'a été créée automatiquement. Le descriptif et la comparaison des branches sont prêts pour une ouverture depuis GitHub. La dernière revue évite également d'attribuer une marque non renseignée aux produits existants ; les tests unitaires/de contrat, types, lint, build et scénarios live ont été relancés avec succès après cette correction.

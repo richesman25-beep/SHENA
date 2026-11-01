@@ -76,7 +76,7 @@ export default async function Detail({
               : typeLabel(p.type)}
           </span>
           <p className="eyebrow">
-            {p.brand} / {category.name}
+            {p.brand || "Vendu par SHENA"} / {category.name}
           </p>
           <h1>{p.name}</h1>
           <p className="detail-price">{money(p.price)}</p>
