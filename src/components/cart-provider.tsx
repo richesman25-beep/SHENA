@@ -70,7 +70,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setNotice(
       mode === "demo"
         ? "Article ajouté au panier de démonstration."
-        : "Article ajouté au panier local. Commandes indisponibles.",
+        : "Article ajouté au panier local. Les prix seront vérifiés côté serveur.",
     );
   }
   function update(id: string, quantity: number) {

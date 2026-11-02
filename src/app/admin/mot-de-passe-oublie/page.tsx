@@ -1,13 +1,12 @@
 import Link from "next/link";
 import { PasswordResetRequestForm } from "@/components/admin-recovery-forms";
 import { getSupabaseConfig } from "@/lib/supabase/config";
-import { trustedSiteOrigin } from "@/lib/admin/recovery";
+import { trustedRecoveryOrigin } from "@/lib/admin/recovery";
 export const metadata = { title: "Récupération de votre accès administrateur" };
 export default function Forgot() {
   let configured = false;
   try {
-    configured =
-      !!getSupabaseConfig() && !!trustedSiteOrigin(process.env.SHENA_SITE_URL);
+    configured = !!getSupabaseConfig() && !!trustedRecoveryOrigin(process.env);
   } catch {}
   return (
     <section className="shell admin-surface admin-login">

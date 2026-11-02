@@ -1,7 +1,9 @@
 import type { ExistingProduct } from "./supabase/config";
 import type { Product } from "./catalog";
-export function normalizeProductType(value: string): Product["type"] {
-  const s = value.trim().toLowerCase();
+export function normalizeProductType(
+  value: string | null | undefined,
+): Product["type"] {
+  const s = typeof value === "string" ? value.trim().toLowerCase() : "";
   if (["digital", "numerique", "numérique"].includes(s)) return "digital";
   if (
     ["stock", "physical", "physical_stock", "physique", "in_stock"].includes(s)

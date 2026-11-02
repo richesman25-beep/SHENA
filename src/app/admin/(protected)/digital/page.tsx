@@ -53,7 +53,7 @@ export default async function DigitalAdmin() {
                 <Link href={`/admin/products/${p.id}`} key={p.id}>
                   <span>▤</span>
                   <div>
-                    <strong>{p.name}</strong>
+                    <strong>{p.name || "Nom à renseigner"}</strong>
                     <small>
                       {p.active ? "Publié" : "Non publié"} · Compléter formats,
                       licence et fichiers
@@ -88,7 +88,10 @@ export default async function DigitalAdmin() {
           <DigitalFileForm
             enabled={capabilities?.digital === true}
             extended={capabilities?.extendedDigitalUploads === true}
-            products={digital}
+            products={digital.map((p) => ({
+              id: p.id,
+              name: p.name || "Nom à renseigner",
+            }))}
           />
         </section>
       </div>

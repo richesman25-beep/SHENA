@@ -23,3 +23,13 @@ export function validateNewPassword(password: string, confirmation: string) {
     password.length >= 12 && password.length <= 128 && password === confirmation
   );
 }
+
+/** En Preview, une origine production héritée ne doit jamais recevoir le lien staging. */
+export function trustedRecoveryOrigin(env: Record<string, string | undefined>) {
+  const origin = trustedSiteOrigin(env.SHENA_SITE_URL);
+  if (!origin || env.VERCEL_ENV !== "preview") return origin;
+  const hosts = [env.VERCEL_URL, env.VERCEL_BRANCH_URL].filter(
+    (h): h is string => !!h && /^[a-z0-9.-]+$/i.test(h),
+  );
+  return hosts.some((host) => origin === `https://${host}`) ? origin : null;
+}

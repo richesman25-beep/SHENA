@@ -13,7 +13,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:e2e:live": "SHENA_E2E_MODE=live playwright test",
-    "test:admin": "node scripts/test-admin.mjs"
+    "test:admin": "node scripts/test-admin.mjs",
+    "test:sql:static": "python3 tests/test_admin_sql_review.py",
+    "check:staging": "node scripts/check-shena-staging.mjs"
   },
   "repository": {
     "type": "git",
@@ -35,6 +37,7 @@
     "sharp": "^0.35.5"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.14",
     "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^26.6.6",

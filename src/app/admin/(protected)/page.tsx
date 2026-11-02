@@ -1,9 +1,14 @@
 import Link from "next/link";
+import { adminCommerceMetrics } from "@/lib/commerce/server";
+import { money } from "@/lib/catalog";
 import { adminProductData } from "@/lib/admin/data";
 import { productMetrics } from "@/lib/admin/products";
 import { Icon } from "@/components/icons";
 export default async function Dashboard() {
-  const data = await adminProductData();
+  const [data, commerce] = await Promise.all([
+    adminProductData(),
+    adminCommerceMetrics(),
+  ]);
   if (!data) return null;
   const metrics = productMetrics(data.products);
   const cards = [
@@ -92,11 +97,35 @@ export default async function Dashboard() {
             <section className="workspace-panel commerce-pending">
               <span className="eyebrow">PROCHAINE ÉTAPE</span>
               <h2>Commandes & revenus</h2>
-              <strong>—</strong>
-              <p>
-                Les commandes et paiements ne sont pas activés. Les revenus
-                apparaîtront uniquement à partir de transactions vérifiées.
-              </p>
+              {commerce ? (
+                "error" in commerce ? (
+                  <p className="admin-error" role="alert">
+                    {commerce.error}
+                  </p>
+                ) : (
+                  <>
+                    <strong>{commerce.orderCount}</strong>
+                    <p>
+                      {commerce.pendingCount} en attente de paiement.
+                      <br />
+                      Revenus contrôlés :{" "}
+                      {money(commerce.verifiedRevenueMinor / 100)}
+                    </p>
+                    <small>
+                      Uniquement les paiements enregistrés comme approuvés par
+                      deux administrateurs distincts.
+                    </small>
+                  </>
+                )
+              ) : (
+                <>
+                  <strong>—</strong>
+                  <p>
+                    Les commandes et paiements ne sont pas activés. Les revenus
+                    apparaîtront uniquement à partir de transactions vérifiées.
+                  </p>
+                </>
+              )}
               <Link href="/admin/commandes">Voir les prérequis →</Link>
             </section>
           </div>

@@ -1,13 +1,14 @@
+import { assertPreviewIsolation } from "./deployment";
 export type ExistingProduct = {
   id: string;
   created_at: string;
-  name: string;
+  name: string | null;
   description: string | null;
-  price_htg: number | string;
-  product_type: string;
+  price_htg: number | string | null;
+  product_type: string | null;
   stock: number | null;
   image_url: string | null;
-  active: boolean;
+  active: boolean | null;
 };
 export const existingProductColumns =
   "id,created_at,name,description,price_htg,product_type,stock,image_url,active" as const;
@@ -47,8 +48,10 @@ export function validateSupabaseConfig(
   return { url: parsed.origin, key };
 }
 export function getSupabaseConfig() {
-  return validateSupabaseConfig(
+  const config = validateSupabaseConfig(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
   );
+  if (config) assertPreviewIsolation(config.url, process.env);
+  return config;
 }

@@ -41,7 +41,9 @@ function ProductEditorFields({
   pending: boolean;
 }) {
   const [active, setActive] = useState(product?.active ?? false);
-  const [type, setType] = useState(product?.product_type || "physical");
+  const [type, setType] = useState(
+    product ? (product.product_type ?? "") : "physical",
+  );
   const logicalType = normalizeProductType(type);
   const visibilityChanged = !!product && product.active !== active;
   return (
@@ -59,7 +61,7 @@ function ProductEditorFields({
           name="name"
           required
           maxLength={160}
-          defaultValue={product?.name}
+          defaultValue={product?.name ?? undefined}
           placeholder="Le nom affiché dans la boutique"
         />
       </label>
@@ -83,7 +85,7 @@ function ProductEditorFields({
             max="100000000"
             step="0.01"
             required
-            defaultValue={product?.price_htg}
+            defaultValue={product?.price_htg ?? undefined}
           />
         </label>
         <label>
@@ -108,7 +110,11 @@ function ProductEditorFields({
             onChange={(e) => setType(e.target.value)}
             required
           >
+            <option value="" disabled>
+              Choisir un type
+            </option>
             {product &&
+              typeof product.product_type === "string" &&
               !["physical", "digital", "preorder"].includes(
                 product.product_type,
               ) && (
@@ -122,7 +128,7 @@ function ProductEditorFields({
           </select>
         </label>
         <label>
-          Stock global
+          Stock global disponible
           {logicalType === "digital" || logicalType === "preorder" ? (
             <>
               <input value="Non applicable" readOnly />
@@ -231,7 +237,7 @@ export function PublicationForm({
           name="confirmation_name"
           required
           autoComplete="off"
-          placeholder={product.name}
+          placeholder={product.name ?? "Nom à renseigner avant publication"}
         />
       </label>
       {state.error && (

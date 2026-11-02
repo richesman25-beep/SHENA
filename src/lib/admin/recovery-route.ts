@@ -1,13 +1,13 @@
 import "server-only";
 import { NextResponse, type NextRequest } from "next/server";
 import { sessionClient } from "../supabase/server";
-import { trustedSiteOrigin } from "./recovery";
+import { trustedRecoveryOrigin } from "./recovery";
 import { hasAdminRole } from "./policy";
 export async function finishRecovery(
   request: NextRequest,
   mode: "hash" | "code",
 ) {
-  const trusted = trustedSiteOrigin(process.env.SHENA_SITE_URL);
+  const trusted = trustedRecoveryOrigin(process.env);
   const base = trusted || request.url;
   const failure = () => {
     const response = NextResponse.redirect(

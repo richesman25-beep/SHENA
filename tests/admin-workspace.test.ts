@@ -200,3 +200,10 @@ test("admin reader follows a lower server row limit without skipping rows", asyn
   );
   assert.deepEqual(offsets, [0, 2, 4]);
 });
+
+test("confirmed nullable price has a different revision from a true zero price", () => {
+  assert.notEqual(
+    productRevision({ ...product, price_htg: null }),
+    productRevision({ ...product, price_htg: 0 }),
+  );
+});

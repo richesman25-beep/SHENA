@@ -93,3 +93,9 @@ Les instructions historiques de démonstration et propositions antérieures rest
 Interface de gestion : `/admin` et `/admin/products` (anciens liens `/admin/produits` conservés). Consulter [l’audit](docs/admin/AUDIT.md), [la configuration Auth / Vercel](docs/admin/CONFIGURATION.md), [les migrations proposées et le retour arrière](docs/admin/MIGRATIONS.md) et [les validations et leurs limites](docs/admin/VALIDATION.md).
 
 `npm run test:admin` lance les parcours navigateur sur un service HTTPS local isolé : aucun compte, e-mail ni produit de production n’est modifié. Les nouvelles tables/politiques ne sont jamais installées automatiquement.
+
+## Sprint MVP — validation STAGING
+
+Le panier, le devis côté serveur, les commandes de test, les zones de livraison et la revue manuelle à deux administrateurs sont préparés derrière des verrouillages STAGING. Aucun paiement réel ou téléchargement payant n'est activé. La reproduction fidèle de products et le correctif ACL sont fournis pour revue, sans exécution distante.
+
+Voir [le rapport et les étapes manuelles](docs/SPRINT-MVP-STAGING.md), [les métadonnées confirmées de products](docs/security/PRODUCTS-CONFIRMED-SCHEMA.md) et [les résultats de validation locale](docs/admin/VALIDATION.md). La PR reste à examiner ; aucune fusion automatique.

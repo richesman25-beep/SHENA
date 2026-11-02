@@ -47,7 +47,7 @@ export default async function Preview({
       <section className="workspace-panel admin-product-preview">
         <ProductGallery
           image=""
-          name={p.name}
+          name={p.name || "Nom à renseigner"}
           url={safeImageUrl(p.image_url)}
           live
         />
@@ -57,7 +57,7 @@ export default async function Preview({
               ? "Produit numérique"
               : "Produit physique / à vérifier selon le type"}
           </span>
-          <h2>{p.name}</h2>
+          <h2>{p.name || "Nom à renseigner"}</h2>
           <strong className="preview-price">
             {p.price_htg === null
               ? "Prix non renseigné"

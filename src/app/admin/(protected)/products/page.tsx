@@ -126,7 +126,9 @@ export default async function Products({
                                   )}
                                 </span>
                                 <span>
-                                  <strong>{p.name}</strong>
+                                  <strong>
+                                    {p.name || "Nom à renseigner"}
+                                  </strong>
                                   <small>{p.id.slice(0, 8)}</small>
                                 </span>
                               </Link>

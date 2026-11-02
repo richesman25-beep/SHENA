@@ -48,7 +48,7 @@ export function selectAdminProducts(
   const selected = rows.filter((p) => {
     const type = normalizeProductType(p.product_type || "");
     return (
-      (!q || normalize(`${p.name} ${p.description || ""}`).includes(q)) &&
+      (!q || normalize(`${p.name || ""} ${p.description || ""}`).includes(q)) &&
       (!filters.status ||
         (filters.status === "active"
           ? p.active
@@ -103,7 +103,11 @@ export function productRevision(p: ExistingProduct) {
     p.id,
     p.name,
     p.description,
-    Number(p.price_htg),
+    p.price_htg === null
+      ? null
+      : Number.isFinite(Number(p.price_htg))
+        ? Number(p.price_htg)
+        : String(p.price_htg),
     p.product_type,
     p.stock,
     p.image_url,

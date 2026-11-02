@@ -2,7 +2,10 @@
 import { redirect } from "next/navigation";
 import { sessionClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/admin/auth";
-import { trustedSiteOrigin, validateNewPassword } from "@/lib/admin/recovery";
+import {
+  trustedRecoveryOrigin,
+  validateNewPassword,
+} from "@/lib/admin/recovery";
 import type { ActionState } from "./actions";
 export async function requestPasswordResetAction(
   _previous: ActionState,
@@ -11,7 +14,7 @@ export async function requestPasswordResetAction(
   const email = String(form.get("email") || "").trim();
   if (email.length > 254 || !email.includes("@"))
     return { error: "Renseignez une adresse e-mail valide." };
-  const origin = trustedSiteOrigin(process.env.SHENA_SITE_URL);
+  const origin = trustedRecoveryOrigin(process.env);
   if (!origin)
     return {
       error:

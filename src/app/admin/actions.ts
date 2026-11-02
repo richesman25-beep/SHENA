@@ -72,7 +72,10 @@ export async function saveProductAction(
             "Ce produit a été modifié depuis son ouverture. Rechargez la page avant de réessayer.",
         };
     }
-    const values = validateProductForm(form, current?.product_type);
+    const values = validateProductForm(
+      form,
+      current?.product_type ?? undefined,
+    );
     if (
       current &&
       current.active !== values.active &&
@@ -80,14 +83,23 @@ export async function saveProductAction(
     )
       return { error: "Confirmez explicitement le changement de publication." };
     if (current) {
-      let query = client
-        .from("products")
-        .update(values)
-        .eq("id", id)
-        .eq("name", current.name)
-        .eq("price_htg", current.price_htg)
-        .eq("product_type", current.product_type)
-        .eq("active", current.active);
+      let query = client.from("products").update(values).eq("id", id);
+      query =
+        current.name === null
+          ? query.is("name", null)
+          : query.eq("name", current.name);
+      query =
+        current.price_htg === null
+          ? query.is("price_htg", null)
+          : query.eq("price_htg", current.price_htg);
+      query =
+        current.product_type === null
+          ? query.is("product_type", null)
+          : query.eq("product_type", current.product_type);
+      query =
+        current.active === null
+          ? query.is("active", null)
+          : query.eq("active", current.active);
       query =
         current.stock === null
           ? query.is("stock", null)

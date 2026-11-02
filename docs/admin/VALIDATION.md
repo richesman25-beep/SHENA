@@ -1,32 +1,26 @@
-# Validation de cette branche
+# Validation locale — sprint STAGING
 
-Contrôles exécutés localement le 2 novembre 2026, sans écriture sur Supabase de production.
+Aucune requête SQL ni modification sur Supabase Production. Aucun test Supabase distant n'est déclaré réussi.
 
-| Contrôle              | Résultat                                                                                                |
-| --------------------- | ------------------------------------------------------------------------------------------------------- |
-| npm run format:check  | Réussi                                                                                                  |
-| npm run lint          | Réussi                                                                                                  |
-| npm run typecheck     | Réussi                                                                                                  |
-| npm test              | 43 tests réussis                                                                                        |
-| npm run build         | Build Next.js de production réussi                                                                      |
-| npm run test:e2e      | 13 parcours publics de démonstration réussis                                                            |
-| npm run test:e2e:live | 3 parcours sans configuration réussis : pas de faux catalogue, admin verrouillé, proximité indisponible |
-| npm run test:admin    | 14 parcours d’intégration réussis sur fixture HTTPS locale isolée                                       |
+| Contrôle                                         | Résultat                            |
+| ------------------------------------------------ | ----------------------------------- |
+| TypeScript                                       | Réussi                              |
+| ESLint                                           | Réussi                              |
+| Tests locaux TypeScript et PostgreSQL en mémoire | 72 réussis, 1 ignoré volontairement |
+| Revue statique SQL/PLpgSQL avec pglast 7.22      | 14 réussis                          |
 
-Le build public et les deux suites publiques ont été lancés avec les deux variables Supabase explicitement vides, pour vérifier les états non configurés sans dépendre du projet distant. Cela ne modifie pas les variables enregistrées de l’environnement ni celles de Vercel.
+Le test ignoré réserve l'exécution du correctif ACL final (MAINTAIN compris) exclusivement à SHENA-STAGING après reproduction fidèle, conformément à la demande du propriétaire. L'analyse statique n'applique aucun SQL.
 
-## Intégration administrateur
+Contrôles complémentaires réussis : formatage, build Next.js, 13 parcours publics de démonstration, 3 parcours publics sans configuration Supabase et **19 parcours admin/commandes** sur fixture HTTPS locale isolée. Contrôle distant STAGING : bloqué avant connexion, clé publique dédiée absente.
 
-Le script `scripts/test-admin.mjs` démarre Next dans `.next-admin-test`, avec le SDK Supabase habituel dirigé uniquement vers un serveur HTTPS sur loopback. Un certificat éphémère est approuvé explicitement ; la vérification TLS n’est jamais désactivée. Identifiants, sessions et données sont générés uniquement pour ce service en mémoire. Aucun mot de passe privilégié n’est intégré à l’application. Les variables publiques réelles sont remplacées dans le processus enfant, les fichiers générés tsconfig/next-env sont restaurés en fin de test, et les certificats temporaires supprimés. Ne pas modifier les fichiers de configuration ni lancer un second serveur de test pendant ce script.
+## Portée des modèles locaux
 
-Parcours vérifiés : accès anonyme protégé ; non-admin portant user_metadata.shena_role refusé ; connexion admin et cookies HttpOnly/SameSite ; compteurs depuis les lignes de test ; création ; modification prix/stock et conflit de révision ; publication et archivage sans suppression ; image falsifiée refusée puis PNG réencodé WebP ; PDF en quarantaine sans lien client ; recherche et aperçu ; navigation à 390 px sans débordement ; demande de récupération ; contrat de refus Storage privé et écritures non autorisées ; révocation du rôle avant une action ; callback de récupération avec destination fixe et changement de mot de passe ; déconnexion.
+PGlite exécute PostgreSQL localement en mémoire pour les modèles admin, Storage et commandes. Les rôles, auth.users, claims et tables Storage sont des représentations synthétiques isolées, sans compte ou donnée Production. Ces tests couvrent user_metadata inefficace, deux admins, CRUD protégé, contraintes, zones, montants recalculés, stock, idempotence, annulation, refus de paiement direct et double revue.
 
-Captures locales générées (ignorées par Git) : `test-results/admin-desktop.png` et `test-results/admin-mobile.png`. Elles utilisent uniquement des données de test identifiées comme telles.
+Le script `scripts/test-admin.mjs` teste les routes, formulaires, Server Actions et le SDK normal sur une fixture HTTPS isolée. Le transport intercepte uniquement l'origine STAGING connue vers loopback et interdit les connexions externes. Certificat éphémère approuvé, TLS jamais désactivé ; mots de passe générés pour la fixture, aucun compte réel créé. Les nouveaux parcours commande utilisent le modèle PostgreSQL local ; Auth et Storage HTTP restent simulés. Les configurations générées sont restaurées après le test.
 
-## Limites explicites
+Ces modèles ne valident ni le projet Supabase réel, ni son PostgREST, ses JWT, ses buckets HTTP, SMTP, Realtime ou sauvegardes. Les métadonnées Production sont celles transmises par le propriétaire. L'application des migrations distantes reste en attente de revue et d'accord.
 
-La fixture vérifie les formulaires, routes, Server Actions et appels SDK ; **elle n’exécute pas PostgreSQL ni les politiques RLS réelles**. Les refus de Storage dans cette suite sont ceux du contrat simulé du service local. Les requêtes publiques du SDK et la validation des fichiers sont aussi testées séparément au niveau unitaire.
+Le build et les parcours publics sont exécutés avec les variables Supabase explicitement vides. La Preview exige l'origine STAGING exacte et des réglages explicites ; ses paramètres Vercel externes ne sont pas configurés par ce test.
 
-Les migrations SQL sont des propositions non exécutées, non validées par une application sur PostgreSQL/Supabase dans cette session. Les fonctionnalités dépendant du manifeste v2 (catégories, galerie, registre, métadonnées) demandent une recette réelle en staging après accord. La suppression des médias et les uploads autres que PDF restent verrouillés par le manifeste proposé.
-
-Aucun test de connexion aux comptes fondateurs, de CRUD réel, de politique RLS/Storage distante, de délivrabilité SMTP ou de restauration de sauvegarde ne peut être déclaré réussi ici. Le réseau actif bloque encore le domaine Supabase ; le brouillon permettant cet hôte n’a pas été publié. Aucun compte fondateur n’a été créé, aucun e-mail de production envoyé, aucun produit/image supprimé, aucune migration exécutée, aucun paiement ni commande réelle démarré.
+Résultats complémentaires de build et navigateur : voir le rapport final de la PR et `docs/SPRINT-MVP-STAGING.md`. Les captures locales dans test-results sont ignorées par Git et ne contiennent que des fixtures.

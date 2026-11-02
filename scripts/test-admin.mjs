@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { randomUUID, randomBytes } from "node:crypto";
 import { spawn, execFileSync } from "node:child_process";
 import assert from "node:assert/strict";
+import { createCommerceBackend } from "../tests/fixtures/commerce-backend.mjs";
 import { chromium, expect } from "@playwright/test";
 const temp = await mkdtemp(join(tmpdir(), "shena-admin-"));
 const originalTs = await readFile("tsconfig.json", "utf8");
@@ -14,10 +15,14 @@ const originalNextEnv = await readFile("next-env.d.ts", "utf8").catch(
   () => null,
 );
 const password = randomBytes(24).toString("hex"); // Ephemeral, never printed or stored in Git.
-let browser, next;
+let browser, next, commerceBackend, commerceBackendReady;
+let enableCommerceFixture = false;
+const stagingOrigin = "https://prqmomjtmyhqijysfoog.supabase.co";
+const commerceZoneId = randomUUID();
 const logs = [];
 const uid = randomUUID(),
-  memberId = randomUUID();
+  memberId = randomUUID(),
+  secondAdminId = randomUUID();
 let rows = [
   {
     id: randomUUID(),
@@ -50,15 +55,20 @@ let passwordUpdates = 0;
 let recoveryCount = 0,
   uploads = 0,
   denied = 0;
-function session(admin = true) {
+function session(admin = true, second = false) {
   const user = {
-    id: admin ? uid : memberId,
-    email: admin ? "admin@example.test" : "member@example.test",
+    id: admin ? (second ? secondAdminId : uid) : memberId,
+    email: admin
+      ? second
+        ? "admin-b@example.test"
+        : "admin@example.test"
+      : "member@example.test",
     aud: "authenticated",
     role: "authenticated",
     app_metadata: admin ? { shena_role: "admin" } : {},
     user_metadata: admin ? {} : { shena_role: "admin" },
     created_at: new Date().toISOString(),
+    email_confirmed_at: new Date().toISOString(),
   };
   const b64 = (x) => Buffer.from(JSON.stringify(x)).toString("base64url");
   const token = `${b64({ alg: "HS256", typ: "JWT" })}.${b64({ sub: user.id, aud: "authenticated", role: "authenticated", exp: Math.floor(Date.now() / 1000) + 3600, iat: Math.floor(Date.now() / 1000), app_metadata: user.app_metadata })}.${randomBytes(32).toString("base64url")}`;
@@ -130,7 +140,13 @@ try {
       res.end(JSON.stringify(value));
     };
     if (url.pathname === "/auth/v1/token" && data.password === password)
-      return send(200, session(data.email === "admin@example.test"));
+      return send(
+        200,
+        session(
+          ["admin@example.test", "admin-b@example.test"].includes(data.email),
+          data.email === "admin-b@example.test",
+        ),
+      );
     if (url.pathname === "/auth/v1/token")
       return send(400, {
         error: "invalid_grant",
@@ -158,6 +174,46 @@ try {
     }
     if (url.pathname === "/rest/v1/rpc/shena_admin_status")
       return admin ? send(200, caps) : send(403, { message: "Denied" });
+    if (
+      url.pathname === "/rest/v1/rpc/shena_checkout_features" &&
+      !enableCommerceFixture
+    )
+      return send(200, {
+        version: 1,
+        delivery: false,
+        orders: false,
+        manualPayments: false,
+      });
+    if (
+      url.pathname === "/rest/v1/rpc/shena_checkout_features" &&
+      !commerceBackend
+    ) {
+      commerceBackendReady ||= createCommerceBackend({
+        products: rows,
+        adminA: uid,
+        adminB: secondAdminId,
+        client: memberId,
+        zoneId: commerceZoneId,
+      });
+      commerceBackend = await commerceBackendReady;
+    }
+    if (
+      commerceBackend &&
+      ((url.pathname.includes("/rpc/shena_") &&
+        !url.pathname.endsWith("shena_admin_status") &&
+        !url.pathname.endsWith("shena_catalog_features")) ||
+        url.pathname.includes("/rest/v1/commerce_") ||
+        (url.pathname === "/rest/v1/products" && req.method === "GET"))
+    ) {
+      const result = await commerceBackend.request(
+        url,
+        req.method,
+        data,
+        user,
+        req.headers.accept?.includes("vnd.pgrst.object"),
+      );
+      if (result) return send(result.status, result.value);
+    }
     if (url.pathname === "/rest/v1/products") {
       const matches = (row) =>
         [...url.searchParams].every(([key, value]) => {
@@ -221,7 +277,13 @@ try {
   const api = `https://localhost:${fixture.address().port}`;
   const env = {
     ...process.env,
-    NEXT_PUBLIC_SUPABASE_URL: api,
+    NEXT_PUBLIC_SUPABASE_URL: stagingOrigin,
+    SHENA_DEPLOYMENT_TARGET: "staging",
+    SHENA_STAGING_PROJECT_REF: "prqmomjtmyhqijysfoog",
+    SHENA_CHECKOUT_MODE: "staging",
+    VERCEL_ENV: "development",
+    SHENA_FIXTURE_API_ORIGIN: api,
+    NODE_OPTIONS: `--import=${new URL("./staging-fixture-transport.mjs", import.meta.url).href}`,
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_local_fixture_only",
     SHENA_SITE_URL: "http://127.0.0.1:3101",
     SHENA_ADMIN_TEST_BUILD: "1",
@@ -259,6 +321,18 @@ try {
     args: ["--no-sandbox"],
   });
   const context = await browser.newContext();
+  await context.route(
+    stagingOrigin + "/storage/v1/object/public/product-images/**",
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "image/png",
+        body: Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lWQAAAAASUVORK5CYII=",
+          "base64",
+        ),
+      }),
+  );
   const page = await context.newPage();
   page.setDefaultTimeout(20000);
   const base = "http://127.0.0.1:3101";
@@ -501,6 +575,225 @@ try {
       assert.equal(denied, 3);
     },
   );
+  let stagedOrderId = "";
+  await check(
+    "server quote ignores browser price and paid flags, rejects invalid bodies",
+    async () => {
+      rows[1].active = true;
+      enableCommerceFixture = true;
+      const response = await context.request.post(base + "/api/cart/quote", {
+        data: {
+          lines: [{ id: rows[0].id, quantity: 2, price: 1 }],
+          paid: true,
+          total: 1,
+        },
+      });
+      assert.equal(response.status(), 200);
+      const result = await response.json();
+      assert.equal(result.quote.subtotalMinor, 100000);
+      assert.equal(result.quote.totalMinor, null);
+      assert.equal(result.quote.canOrder, false);
+      const invalid = await context.request.post(base + "/api/cart/quote", {
+        data: {
+          lines: [
+            { id: rows[0].id, quantity: 1 },
+            { id: rows[0].id, quantity: 1 },
+          ],
+        },
+      });
+      assert.equal(invalid.status(), 422);
+      const large = await context.request.post(base + "/api/cart/quote", {
+        headers: { "Content-Type": "application/json" },
+        data: '"' + "x".repeat(17000) + '"',
+      });
+      assert.equal(large.status(), 413);
+    },
+  );
+  await check(
+    "checkout creates an unpaid order through Next actions SDK and local PostgreSQL",
+    async () => {
+      await page.goto(base + "/panier");
+      await page.evaluate(
+        ([id]) =>
+          localStorage.setItem(
+            "shena.cart.v1.live",
+            JSON.stringify([{ id, quantity: 2 }]),
+          ),
+        [rows[0].id],
+      );
+      await page.goto(base + "/commander");
+      await page
+        .getByLabel("Département", { exact: true })
+        .selectOption("centre");
+      await page.getByLabel("Commune prise en charge").selectOption("hinche");
+      await page
+        .getByLabel("Zone de livraison", { exact: true })
+        .selectOption(commerceZoneId);
+      await page
+        .getByRole("button", {
+          name: "Vérifier les prix côté serveur",
+          exact: true,
+        })
+        .click();
+      await expect(page.locator(".checkout-quote")).toContainText("1 100 HTG");
+      await page.getByLabel("Nom complet").fill("Client du test navigateur");
+      await page
+        .getByLabel("Téléphone", { exact: true })
+        .fill("+509 1234 5678");
+      await page
+        .getByLabel("Adresse de livraison", { exact: true })
+        .fill("Adresse fictive de staging local");
+      await page.locator("input[name=confirmed]").check();
+      await page
+        .getByRole("button", {
+          name: "Enregistrer la commande non payée",
+          exact: true,
+        })
+        .click();
+      await expect(
+        page.locator(".checkout-contact [role=status]"),
+      ).toContainText("en attente de paiement");
+      const href = await page
+        .getByRole("link", { name: "Voir le suivi", exact: true })
+        .getAttribute("href");
+      stagedOrderId = href.split("/").at(-1);
+      await page
+        .getByRole("link", { name: "Voir le suivi", exact: true })
+        .click();
+      await expect(page.locator(".order-detail")).toContainText(
+        "En attente de paiement",
+      );
+      await expect(
+        page.locator('a[download],a[href*="/object/sign/"]'),
+      ).toHaveCount(0);
+    },
+  );
+  await check(
+    "admin follows actual local order and cannot approve a disabled payment",
+    async () => {
+      await page.goto(base + "/admin/commandes");
+      await expect(page.locator("tbody tr")).toHaveCount(1);
+      await page.getByRole("link", { name: "Ouvrir →", exact: true }).click();
+      await expect(page.locator(".order-detail")).toContainText(
+        "En attente de paiement",
+      );
+      await expect(
+        page.getByRole("button", {
+          name: "Soumettre au second administrateur",
+          exact: true,
+        }),
+      ).toBeDisabled();
+      await page.goto(base + "/admin/livraisons");
+      await expect(
+        page.getByRole("heading", {
+          name: "Zone synthétique Hinche",
+          exact: true,
+        }),
+      ).toBeVisible();
+    },
+  );
+  await check(
+    "customer login digital order and owner-only tracking at mobile width",
+    async () => {
+      const buyerContext = await browser.newContext({
+        viewport: { width: 390, height: 844 },
+      });
+      const buyer = await buyerContext.newPage();
+      await buyer.goto(base + "/compte/connexion");
+      await buyer
+        .getByLabel("E-mail", { exact: true })
+        .fill("member@example.test");
+      await buyer.getByLabel("Mot de passe", { exact: true }).fill(password);
+      await buyer
+        .getByRole("button", {
+          name: "Me connecter pour commander",
+          exact: true,
+        })
+        .click();
+      await expect(buyer).toHaveURL(base + "/commander");
+      await buyer.evaluate(
+        ([id]) =>
+          localStorage.setItem(
+            "shena.cart.v1.live",
+            JSON.stringify([{ id, quantity: 1 }]),
+          ),
+        [rows[1].id],
+      );
+      await buyer.reload();
+      await buyer
+        .getByRole("button", {
+          name: "Vérifier les prix côté serveur",
+          exact: true,
+        })
+        .click();
+      await expect(buyer.locator(".checkout-quote")).toContainText("100 HTG");
+      await buyer.getByLabel("Nom complet").fill("Acheteur numérique local");
+      await buyer
+        .getByLabel("Téléphone", { exact: true })
+        .fill("+509 8765 4321");
+      await buyer.locator("input[name=confirmed]").check();
+      assert.ok(
+        await buyer.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      );
+      await buyer.screenshot({
+        path: "test-results/checkout-mobile.png",
+        fullPage: true,
+        caret: "initial",
+      });
+      await buyer
+        .getByRole("button", {
+          name: "Enregistrer la commande non payée",
+          exact: true,
+        })
+        .click();
+      await expect(
+        buyer.locator(".checkout-contact [role=status]"),
+      ).toContainText("en attente de paiement");
+      await buyer
+        .getByRole("link", { name: "Voir le suivi", exact: true })
+        .click();
+      await expect(buyer.locator(".order-detail")).toContainText(
+        "En attente de paiement",
+      );
+      await buyer.goto(buyer.url() + "?paid=true&payment_status=success");
+      await expect(buyer.locator(".order-detail")).toContainText(
+        "En attente de paiement",
+      );
+      await expect(
+        buyer.locator('a[download],a[href*="/object/sign/"]'),
+      ).toHaveCount(0);
+      await buyer.goto(base + "/compte/commandes/" + stagedOrderId);
+      await expect(buyer.getByRole("heading", { level: 1 })).toHaveText(
+        "Cette page reste à découvrir.",
+      );
+      await buyer.goto(base + "/admin/commandes");
+      await expect(buyer.getByRole("heading", { level: 1 })).toHaveText(
+        "Accès refusé",
+      );
+      await buyerContext.close();
+    },
+  );
+  await check(
+    "a second separate admin can authenticate and view the two local orders",
+    async () => {
+      const secondContext = await browser.newContext();
+      const second = await secondContext.newPage();
+      await second.goto(base + "/admin/connexion");
+      await second
+        .getByLabel("E-mail", { exact: true })
+        .fill("admin-b@example.test");
+      await second.getByLabel("Mot de passe", { exact: true }).fill(password);
+      await second
+        .getByRole("button", { name: "Se connecter", exact: true })
+        .click();
+      await expect(second).toHaveURL(base + "/admin");
+      await second.goto(base + "/admin/commandes");
+      await expect(second.locator("tbody tr")).toHaveCount(2);
+      await secondContext.close();
+    },
+  );
   await check(
     "role revoked after login cannot write through a server action",
     async () => {
@@ -562,11 +855,35 @@ try {
     "Admin integration complete: isolated local fixture only; no production Supabase writes.",
   );
 } catch (error) {
+  if (browser) {
+    const failed = browser
+      .contexts()
+      .flatMap((c) => c.pages())
+      .find((p) => !p.isClosed());
+    if (failed) {
+      await mkdir("test-results", { recursive: true });
+      await writeFile(
+        "test-results/admin-failure.txt",
+        await failed
+          .locator("body")
+          .innerText()
+          .catch(() => "Unavailable"),
+      );
+      await failed
+        .screenshot({
+          path: "test-results/admin-failure.png",
+          fullPage: true,
+          caret: "initial",
+        })
+        .catch(() => {});
+    }
+  }
   console.error(error);
   console.error(logs.join("").slice(-10000));
   process.exitCode = 1;
 } finally {
   await browser?.close();
+  await commerceBackend?.close();
   next?.kill("SIGTERM");
   fixture.closeAllConnections();
   await new Promise((resolve) => fixture.close(resolve));

@@ -56,7 +56,7 @@ export default async function Edit({
       <div className="workspace-page-heading">
         <div>
           <span className="eyebrow">MODIFIER VOTRE CATALOGUE</span>
-          <h1>{data.name}</h1>
+          <h1>{data.name || "Nom à renseigner"}</h1>
           <p>
             <span
               className={`publication-status ${data.active ? "published" : ""}`}
