@@ -33,7 +33,7 @@ Tous les fichiers de migration de revue se terminent par ROLLBACK. Aucun n'est e
 
 ## Tests et limites
 
-Résultats : TypeScript, lint, formatage et build réussis ; 73 tests locaux réussis et 1 ignoré volontairement ; 14 contrôles SQL statiques ; 13 parcours publics démo, 3 sans configuration et 19 admin/commandes réussis. Détails : [admin/VALIDATION.md](admin/VALIDATION.md). Les modèles PostgreSQL en mémoire et les parcours navigateur isolés ne prouvent pas le fonctionnement du projet Supabase distant, de son Auth, de son SMTP ou de son Storage. Le correctif ACL final est contrôlé statiquement ; son exécution est réservée à SHENA-STAGING. Aucune sauvegarde restaurée et vérifiée n'est annoncée.
+Résultats : TypeScript, lint, formatage et build réussis ; 73 tests locaux réussis et 1 ignoré volontairement ; 14 contrôles SQL statiques ; 13 parcours publics démo, 3 sans configuration et 20 admin/commandes réussis. Détails : [admin/VALIDATION.md](admin/VALIDATION.md). Les modèles PostgreSQL en mémoire et les parcours navigateur isolés ne prouvent pas le fonctionnement du projet Supabase distant, de son Auth, de son SMTP ou de son Storage. Le correctif ACL final est contrôlé statiquement ; son exécution est réservée à SHENA-STAGING. Aucune sauvegarde restaurée et vérifiée n'est annoncée.
 
 ## Configuration manuelle indispensable
 

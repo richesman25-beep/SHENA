@@ -17,6 +17,7 @@ const originalNextEnv = await readFile("next-env.d.ts", "utf8").catch(
 const password = randomBytes(24).toString("hex"); // Ephemeral, never printed or stored in Git.
 let browser, next, commerceBackend, commerceBackendReady;
 let enableCommerceFixture = false;
+let missingMigrations = false;
 const stagingOrigin = "https://prqmomjtmyhqijysfoog.supabase.co";
 const commerceZoneId = randomUUID();
 const logs = [];
@@ -172,6 +173,11 @@ try {
       recoveryCount++;
       return send(200, {});
     }
+    if (missingMigrations && url.pathname.startsWith("/rest/v1/rpc/shena_"))
+      return send(404, {
+        code: "PGRST202",
+        message: "Function absent in isolated fixture",
+      });
     if (url.pathname === "/rest/v1/rpc/shena_admin_status")
       return admin ? send(200, caps) : send(403, { message: "Denied" });
     if (
@@ -370,6 +376,46 @@ try {
     );
     await expect(page.locator(".admin-metric").first()).toContainText("2");
   });
+  await check(
+    "missing migrations lock server writes while catalogue remains available",
+    async () => {
+      await page.goto(base + "/admin/products/new");
+      await page
+        .getByLabel("Nom du produit", { exact: true })
+        .fill("Ne doit pas être enregistré");
+      await page.getByLabel("Prix en HTG").fill("120.50");
+      await page.getByLabel("Stock global").fill("3");
+      const before = JSON.stringify(rows);
+      missingMigrations = true;
+      try {
+        await page
+          .getByRole("button", { name: "Créer le produit", exact: true })
+          .click();
+        await expect(
+          page.locator(".product-editor-form .admin-error"),
+        ).toContainText("structures nécessaires");
+        assert.equal(JSON.stringify(rows), before);
+        await page.reload();
+        await expect(
+          page.getByRole("button", { name: "Créer le produit", exact: true }),
+        ).toBeDisabled();
+        await expect(page.locator(".admin-notice")).toContainText(
+          "écritures verrouillées",
+        );
+        await page.goto(base + "/boutique");
+        await expect(page.locator(".product-card")).toHaveCount(1);
+        await expect(page.locator(".product-card")).toContainText(rows[0].name);
+        const response = await page.request.post(base + "/api/cart/quote", {
+          data: { lines: [{ id: rows[0].id, quantity: 1 }] },
+        });
+        assert.equal(response.status(), 200);
+        assert.equal((await response.json()).quote.canOrder, false);
+        assert.equal(JSON.stringify(rows), before);
+      } finally {
+        missingMigrations = false;
+      }
+    },
+  );
   await check("create product through server action", async () => {
     await page.goto(base + "/admin/products/new");
     await page

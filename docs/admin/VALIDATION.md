@@ -11,7 +11,7 @@ Aucune requête SQL ni modification sur Supabase Production. Aucun test Supabase
 
 Le test ignoré réserve l'exécution du correctif ACL final (MAINTAIN compris) exclusivement à SHENA-STAGING après reproduction fidèle, conformément à la demande du propriétaire. L'analyse statique n'applique aucun SQL.
 
-Contrôles complémentaires réussis : formatage, build Next.js, 13 parcours publics de démonstration, 3 parcours publics sans configuration Supabase et **19 parcours admin/commandes** sur fixture HTTPS locale isolée. Contrôle distant STAGING : bloqué avant connexion, clé publique dédiée absente.
+Contrôles complémentaires réussis : formatage, build Next.js, 13 parcours publics de démonstration, 3 parcours publics sans configuration Supabase et **20 parcours admin/commandes** sur fixture HTTPS locale isolée. Contrôle distant STAGING : bloqué avant connexion, clé publique dédiée absente.
 
 ## Portée des modèles locaux
 
@@ -24,3 +24,5 @@ Ces modèles ne valident ni le projet Supabase réel, ni son PostgREST, ses JWT,
 Le build et les parcours publics sont exécutés avec les variables Supabase explicitement vides. La Preview exige l'origine STAGING exacte et des réglages explicites ; ses paramètres Vercel externes ne sont pas configurés par ce test.
 
 Résultats complémentaires de build et navigateur : voir le rapport final de la PR et `docs/SPRINT-MVP-STAGING.md`. Les captures locales dans test-results sont ignorées par Git et ne contiennent que des fixtures.
+
+Cas supplémentaire vérifié : RPC de migrations absentes (404), refus d’une Server Action depuis un formulaire déjà ouvert, bouton désactivé après rechargement, catalogue public encore accessible et devis sans autorisation de commander ; aucune ligne modifiée dans la fixture.
