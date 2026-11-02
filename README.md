@@ -99,3 +99,5 @@ Interface de gestion : `/admin` et `/admin/products` (anciens liens `/admin/prod
 Le panier, le devis côté serveur, les commandes de test, les zones de livraison et la revue manuelle à deux administrateurs sont préparés derrière des verrouillages STAGING. Aucun paiement réel ou téléchargement payant n'est activé. La reproduction fidèle de products et le correctif ACL sont fournis pour revue, sans exécution distante.
 
 Voir [le rapport et les étapes manuelles](docs/SPRINT-MVP-STAGING.md), [les métadonnées confirmées de products](docs/security/PRODUCTS-CONFIRMED-SCHEMA.md) et [les résultats de validation locale](docs/admin/VALIDATION.md). La PR reste à examiner ; aucune fusion automatique.
+
+Publication du catalogue seul : [procédure minimale](docs/PUBLISH-CATALOG.md). Contrôle local sans réseau : `npm run check:deployment -- production` (ou `preview` dans son environnement dédié).

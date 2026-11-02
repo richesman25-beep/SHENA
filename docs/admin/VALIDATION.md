@@ -6,7 +6,7 @@ Aucune requête SQL ni modification sur Supabase Production. Aucun test Supabase
 | ------------------------------------------------ | ----------------------------------- |
 | TypeScript                                       | Réussi                              |
 | ESLint                                           | Réussi                              |
-| Tests locaux TypeScript et PostgreSQL en mémoire | 72 réussis, 1 ignoré volontairement |
+| Tests locaux TypeScript et PostgreSQL en mémoire | 73 réussis, 1 ignoré volontairement |
 | Revue statique SQL/PLpgSQL avec pglast 7.22      | 14 réussis                          |
 
 Le test ignoré réserve l'exécution du correctif ACL final (MAINTAIN compris) exclusivement à SHENA-STAGING après reproduction fidèle, conformément à la demande du propriétaire. L'analyse statique n'applique aucun SQL.

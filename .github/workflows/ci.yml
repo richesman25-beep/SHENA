@@ -28,3 +28,12 @@ jobs:
       - run: npm run test:e2e
       - run: npm run test:e2e:live
       - run: npm run test:admin
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: public-test-failures-${{ github.run_id }}
+          path: |
+            test-results/demo/
+            test-results/live/
+          if-no-files-found: ignore
+          retention-days: 3

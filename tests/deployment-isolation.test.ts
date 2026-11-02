@@ -79,3 +79,18 @@ test("preview recovery refuses inherited production origin and untrusted hosts",
     null,
   );
 });
+
+test("a declared local staging cannot use production and production cannot use staging", () => {
+  assert.throws(() =>
+    assertPreviewIsolation("https://production.supabase.co", {
+      ...staging,
+      VERCEL_ENV: undefined,
+    }),
+  );
+  assert.throws(() =>
+    assertPreviewIsolation(shenaStagingOrigin, {
+      ...staging,
+      VERCEL_ENV: "production",
+    }),
+  );
+});

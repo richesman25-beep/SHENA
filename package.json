@@ -15,7 +15,8 @@
     "test:e2e:live": "SHENA_E2E_MODE=live playwright test",
     "test:admin": "node scripts/test-admin.mjs",
     "test:sql:static": "python3 tests/test_admin_sql_review.py",
-    "check:staging": "node scripts/check-shena-staging.mjs"
+    "check:staging": "node scripts/check-shena-staging.mjs",
+    "check:deployment": "tsx scripts/check-deployment.ts"
   },
   "repository": {
     "type": "git",

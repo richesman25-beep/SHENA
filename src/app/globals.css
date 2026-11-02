@@ -3696,3 +3696,12 @@ body:has(.admin-surface) .footer {
 .order-detail h2 {
   overflow-wrap: anywhere;
 }
+
+.staging-notice {
+  padding: 0.65rem 1rem;
+  text-align: center;
+  background: #fff3cd;
+  color: #513d00;
+  font-size: 0.8rem;
+  font-weight: 600;
+}

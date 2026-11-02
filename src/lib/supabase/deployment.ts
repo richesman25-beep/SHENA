@@ -12,7 +12,15 @@ export function assertPreviewIsolation(
   url: string,
   env: DeploymentEnvironment,
 ) {
-  if (env.VERCEL_ENV !== "preview") return;
+  const declaredStaging = env.SHENA_DEPLOYMENT_TARGET === "staging";
+  if (
+    env.VERCEL_ENV === "production" &&
+    (declaredStaging || url === shenaStagingOrigin)
+  )
+    throw new Error(
+      "Configuration STAGING refusée sur un déploiement Production.",
+    );
+  if (env.VERCEL_ENV !== "preview" && !declaredStaging) return;
   if (
     env.SHENA_DEPLOYMENT_TARGET !== "staging" ||
     env.SHENA_STAGING_PROJECT_REF !== shenaStagingProjectRef ||
