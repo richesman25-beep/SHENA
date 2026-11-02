@@ -1,5 +1,5 @@
 """Vérifie fichiers et octets Storage restaurés. Ne certifie PAS une restauration PostgreSQL."""
-import argparse,hashlib,json,re
+import argparse,hashlib,json,re,os
 from pathlib import Path
 
 def digest(path):
@@ -33,6 +33,7 @@ def verify(manifest_path):
  if len(inventory)!=len(expected) or len(objects)!=len(actual) or actual!=expected:raise ValueError('Couverture Storage incomplète ou doublons')
  for row in objects:
   saved=file(row['backup']);restored=file(row['restored_copy'])
+  if os.path.samefile(saved,restored):raise ValueError('Une copie restaurée distincte de l’archive est requise')
   if row['backup']['sha256']!=row['restored_copy']['sha256'] or saved.stat().st_size!=restored.stat().st_size:raise ValueError('Octets restaurés différents')
  return {'artifact_integrity':True,'storage_objects_covered':len(actual),'restored_storage_bytes_match':True,'database_restore_verified':False,'storage_service_restore_verified':False,'approval_granted':False,'note':'La preuve de restauration DB doit être examinée et les services restaurés testés ; aucun SET de validation généré.'}
 

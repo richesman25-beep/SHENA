@@ -100,6 +100,11 @@ class SqlReviewTests(unittest.TestCase):
             self.assertTrue(result["artifact_integrity"])
             self.assertFalse(result["database_restore_verified"])
             self.assertFalse(result["approval_granted"])
+            original=data["storage_objects"][0]["restored_copy"]
+            data["storage_objects"][0]["restored_copy"]=data["storage_objects"][0]["backup"]
+            manifest.write_text(json.dumps(data))
+            with self.assertRaises(ValueError):module.verify(manifest)
+            data["storage_objects"][0]["restored_copy"]=original;manifest.write_text(json.dumps(data))
             (root/"restored.pdf").write_bytes(b"TAMPERED")
             with self.assertRaises(ValueError):module.verify(manifest)
             data["storage_objects"]=[];manifest.write_text(json.dumps(data))
