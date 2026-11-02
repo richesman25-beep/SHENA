@@ -2,8 +2,11 @@
 -- Contrôler qu'aucun bucket de ces noms n'existe. Ne pas convertir un bucket
 -- existant privé en public, ni écraser ses politiques ou ses données.
 BEGIN;
-INSERT INTO storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
- VALUES('product-images','product-images',true,2097152,ARRAY['image/webp']);
+-- Réutilise le bucket existant sans changer sa visibilité, ses limites ou ses fichiers.
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM storage.buckets WHERE id='product-images' AND public=true) THEN
+ RAISE EXCEPTION 'Bucket product-images public existant requis ; ne pas recréer automatiquement'; END IF;
+END $$;
 INSERT INTO storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
  VALUES('digital-quarantine','digital-quarantine',false,2097152,ARRAY['application/pdf']);
 INSERT INTO storage.buckets(id,name,public,file_size_limit)

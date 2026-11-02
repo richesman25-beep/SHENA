@@ -111,7 +111,7 @@ export function Header() {
       <div className="demo-strip">
         {mode === "demo"
           ? storefront.disclaimer
-          : "Mode catalogue réel · Commandes et paiements indisponibles · Géographie en préparation"}
+          : "Catalogue réel · Vérification des prix avant commande · Paiement en ligne non activé"}
       </div>
     </>
   );

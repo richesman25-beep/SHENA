@@ -13,6 +13,11 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r tests/requirements-sql-review.txt
+      - run: python tests/test_admin_sql_review.py
       - run: npm ci
       - run: npm run format:check
       - run: npm run lint
@@ -22,3 +27,13 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - run: npm run test:e2e:live
+      - run: npm run test:admin
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: public-test-failures-${{ github.run_id }}
+          path: |
+            test-results/demo/
+            test-results/live/
+          if-no-files-found: ignore
+          retention-days: 3

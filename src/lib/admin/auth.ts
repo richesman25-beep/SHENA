@@ -19,6 +19,7 @@ export const adminContext = cache(async () => {
       status: "admin" as const,
       client,
       userId: data.user.id,
+      userEmail: data.user.email,
       capabilities: result.error ? null : parseCapabilities(result.data),
     };
   } catch {

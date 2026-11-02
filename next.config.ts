@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 const config: NextConfig = {
   poweredByHeader: false,
+  distDir:
+    process.env.SHENA_ADMIN_TEST_BUILD === "1" ? ".next-admin-test" : ".next",
   experimental: { serverActions: { bodySizeLimit: "3mb" } },
   async headers() {
     return [

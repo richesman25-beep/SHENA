@@ -7,7 +7,11 @@ import { useCatalog } from "./catalog-provider";
 import { useCart } from "./cart-provider";
 import { money, typeLabel } from "@/lib/catalog";
 import { cartTotal } from "@/lib/cart";
-export function CartView() {
+export function CartView({
+  orderingEnabled = false,
+}: {
+  orderingEnabled?: boolean;
+}) {
   const { products, mode, status } = useCatalog();
   const { lines, ready, update } = useCart();
   if (status !== "ready") return <CatalogStatus />;
@@ -97,9 +101,18 @@ export function CartView() {
           Ce panier est conservé sur cet appareil. Les prix et stocks seront
           revérifiés côté serveur lors du futur parcours de commande.
         </p>
-        <button className="button" disabled>
-          Commandes bientôt disponibles
-        </button>
+        {mode === "live" && (
+          <Link className="button button-secondary" href="/commander">
+            {orderingEnabled
+              ? "Préparer ma commande →"
+              : "Vérifier mon panier côté serveur →"}
+          </Link>
+        )}
+        {!orderingEnabled && (
+          <button className="button" disabled>
+            Commandes bientôt disponibles
+          </button>
+        )}
         <small>Pas de paiement, pas de réservation de stock.</small>
         <Link className="text-link" href="/boutique">
           Continuer mes découvertes →

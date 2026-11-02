@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     template: "%s | SHENA",
   },
   description:
-    "Découvrez l’univers SHENA : mode, technologie, beauté, maison et ressources numériques pour Haïti. Catalogue de démonstration.",
+    "Découvrez l’univers SHENA : mode, technologie, beauté, maison et ressources numériques pour Haïti. Catalogue SHENA.",
   robots: { index: false, follow: false },
 };
 export const dynamic = "force-dynamic";
@@ -24,6 +24,9 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const state = await loadCatalog();
+  const isStaging =
+    process.env.VERCEL_ENV === "preview" ||
+    process.env.SHENA_DEPLOYMENT_TARGET === "staging";
   return (
     <html lang="fr">
       <body>
@@ -33,6 +36,15 @@ export default async function RootLayout({
               <a className="skip-link" href="#contenu">
                 Aller au contenu
               </a>
+              {isStaging && (
+                <aside
+                  className="staging-notice"
+                  aria-label="Environnement de test"
+                >
+                  SHENA STAGING · Tests uniquement · Utilisez des données
+                  fictives · Aucun paiement réel
+                </aside>
+              )}
               <Header />
               <main id="contenu">{children}</main>
               <footer className="footer">
@@ -75,7 +87,9 @@ export default async function RootLayout({
                       Confidentialité
                     </Link>
                     <p className="footer-note">
-                      Version de démonstration.
+                      {state.mode === "demo"
+                        ? "Version de démonstration."
+                        : "Catalogue SHENA."}
                       <br />
                       Comptes et paiements à venir.
                     </p>
@@ -83,7 +97,11 @@ export default async function RootLayout({
                 </div>
                 <div className="shell footer-bottom">
                   <span>© {new Date().getFullYear()} SHENA</span>
-                  <span>Visuels, produits et prix de démonstration</span>
+                  <span>
+                    {state.mode === "demo"
+                      ? "Visuels, produits et prix de démonstration"
+                      : "Prix en HTG · Aucun paiement en ligne activé"}
+                  </span>
                 </div>
               </footer>
             </LocationProvider>

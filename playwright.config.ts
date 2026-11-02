@@ -28,5 +28,5 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 60000,
   },
-  reporter: "list",
+  reporter: process.env.CI ? [["list"], ["github"]] : "list",
 });

@@ -2,14 +2,11 @@
 import { useActionState } from "react";
 import {
   loginAction,
-  saveProductAction,
-  uploadImageAction,
   saveCategoryAction,
   assignCategoryAction,
   uploadDigitalAction,
   type ActionState,
 } from "@/app/admin/actions";
-import type { ExistingProduct } from "@/lib/supabase/config";
 
 function Result({ state }: { state: ActionState }) {
   return (
@@ -59,132 +56,6 @@ export function LoginForm({ enabled }: { enabled: boolean }) {
         Seuls les comptes existants explicitement autorisés côté serveur sont
         acceptés. Aucun compte n’est créé ici.
       </small>
-    </form>
-  );
-}
-export function ProductForm({
-  product,
-  enabled,
-}: {
-  product?: ExistingProduct;
-  enabled: boolean;
-}) {
-  const [state, action, pending] = useActionState(saveProductAction, {});
-
-  return (
-    <form action={action} className="admin-form">
-      <input type="hidden" name="id" value={product?.id || ""} />
-      <label>
-        Nom
-        <input
-          name="name"
-          defaultValue={product?.name}
-          required
-          maxLength={160}
-        />
-      </label>
-      <label>
-        Description
-        <textarea
-          name="description"
-          defaultValue={product?.description || ""}
-          maxLength={15000}
-          rows={5}
-        />
-      </label>
-      <label>
-        Type
-        <select
-          name="product_type"
-          defaultValue={product?.product_type || "physical"}
-          required
-        >
-          {product &&
-            !["physical", "digital", "preorder"].includes(
-              product.product_type,
-            ) && (
-              <option value={product.product_type}>
-                Valeur existante : {product.product_type}
-              </option>
-            )}
-          <option value="" disabled>
-            Type existant à vérifier
-          </option>
-          <option value="physical">Physique en stock</option>
-          <option value="preorder">Sur commande</option>
-          <option value="digital">Numérique</option>
-        </select>
-      </label>
-      <label>
-        Prix HTG
-        <input
-          name="price_htg"
-          type="number"
-          min="0"
-          max="100000000"
-          step="0.01"
-          required
-          defaultValue={product?.price_htg}
-        />
-      </label>
-      <label>
-        Stock global
-        <input
-          name="stock"
-          type="number"
-          min="0"
-          max="1000000"
-          step="1"
-          required
-          defaultValue={product ? (product.stock ?? "") : 0}
-        />
-      </label>
-      <label className="admin-check">
-        <input
-          name="active"
-          type="checkbox"
-          defaultChecked={product?.active ?? false}
-        />
-        Produit actif (visible au public)
-      </label>
-      <small>
-        Numérique et sur commande : stock physique fixé à zéro. Prix et type
-        existants sont à vérifier avant enregistrement. Les variantes et
-        emplacements demandent un schéma approuvé.
-      </small>
-      <Result state={state} />
-      <button className="button" disabled={!enabled || pending}>
-        {pending ? "Enregistrement…" : "Enregistrer le produit"}
-      </button>
-      {!enabled && (
-        <p>Écriture verrouillée : politiques administrateur non confirmées.</p>
-      )}
-    </form>
-  );
-}
-export function ImageForm({ id, enabled }: { id: string; enabled: boolean }) {
-  const [state, action, pending] = useActionState(uploadImageAction, {});
-  return (
-    <form action={action} className="admin-form">
-      <input type="hidden" name="id" value={id} />
-      <label>
-        Image du produit
-        <input
-          name="file"
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          required
-        />
-      </label>
-      <small>
-        JPEG, PNG ou WebP, 2 Mo maximum. Décodage, limite de pixels, suppression
-        des métadonnées et conversion WebP côté serveur. Pas de SVG. Les
-        anciennes images sont conservées.
-      </small>
-      <Result state={state} />
-      <button className="button" disabled={!enabled || pending}>
-        {pending ? "Traitement…" : "Téléverser et associer l’image"}
-      </button>
     </form>
   );
 }
@@ -276,7 +147,9 @@ export function AssignCategoryForm({
 export function DigitalFileForm({
   products,
   enabled,
+  extended = false,
 }: {
+  extended?: boolean;
   products: { id: string; name: string }[];
   enabled: boolean;
 }) {
@@ -294,20 +167,28 @@ export function DigitalFileForm({
         </select>
       </label>
       <label>
-        Fichier PDF privé
-        <input name="file" type="file" accept="application/pdf" required />
+        Fichier numérique privé
+        <input
+          name="file"
+          type="file"
+          accept={
+            extended ? ".pdf,.zip,.docx,.xlsx,.pptx,.epub" : "application/pdf"
+          }
+          required
+        />
       </label>
       <small>
-        2 Mo maximum, quarantaine privée exclusivement. Les formats ZIP, Canva,
-        Word et Excel seront ajoutés après définition d’une analyse antivirus
-        appropriée. Aucun lien de téléchargement client n’est généré.
+        {extended
+          ? "PDF, ZIP, DOCX, XLSX, PPTX ou EPUB · 2 Mo maximum. La signature est contrôlée, mais la validation complète et l’analyse antivirus restent nécessaires. Les archives ne sont jamais décompressées par cette application."
+          : "PDF uniquement · 2 Mo maximum. Les autres formats restent verrouillés tant que les nouvelles permissions ne sont pas confirmées."}{" "}
+        Aucun lien de téléchargement client n’est généré.
       </small>
       <Result state={state} />
       <button
         className="button"
         disabled={!enabled || pending || !products.length}
       >
-        Placer le PDF en quarantaine privée
+        Placer le fichier en quarantaine privée
       </button>
     </form>
   );

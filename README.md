@@ -35,7 +35,7 @@ Après installation du navigateur Playwright (`npx playwright install chromium`,
 - Documents provisoires : livraison/retours, confidentialité, conditions de vente, licences.
 - Métadonnées, icône, chargement, erreur et 404, accès clavier et mise en page mobile.
 
-**Pas de commandes, comptes, administration, paiements, réservations de stock ou téléchargements opérationnels.** Les routes correspondantes ne sont pas implémentées et renvoient une 404. Le panier n’est jamais une source fiable pour une commande réelle. Son prix est recalculé depuis le catalogue local pour la démonstration, sans garantie serveur de stock.
+**Les commandes, paiements, réservations de stock et téléchargements payants ne sont pas opérationnels.** L’administration `/admin` possède une authentification Supabase distincte et des écritures conditionnées aux autorisations serveur/RLS. Le panier n’est jamais une source fiable pour une commande réelle. Son prix est recalculé depuis le catalogue local pour la démonstration, sans garantie serveur de stock.
 
 ## Structure
 
@@ -87,3 +87,17 @@ La préférence locale `shena.location.v1` peut être modifiée ou effacée via 
 L'administration `/admin` est vérifiée côté serveur, sans compte fictif ni mot de passe intégré. Les formulaires sont préparés mais les écritures restent bloquées tant que les capacités/politiques n'ont pas été approuvées et installées. Aucun service_role n'est utilisé. Les uploads d'images sont décodés et réencodés ; les fichiers numériques restent en quarantaine privée (PDF, 2 Mo maximum pour cette première phase, compatible avec la limite de requête prévue). Aucun téléchargement payant ni commande réelle n'est activé.
 
 Les instructions historiques de démonstration et propositions antérieures restent dans le dépôt pour préserver l'historique ; le plan production ci-dessus fait autorité pour cette nouvelle phase. Ne pas appliquer ensemble les SQL historiques et ceux de cette mission sans consolidation et approbation. Aucune migration ne s'exécute au build ou à l'installation.
+
+## Finalisation SHENA Admin
+
+Interface de gestion : `/admin` et `/admin/products` (anciens liens `/admin/produits` conservés). Consulter [l’audit](docs/admin/AUDIT.md), [la configuration Auth / Vercel](docs/admin/CONFIGURATION.md), [les migrations proposées et le retour arrière](docs/admin/MIGRATIONS.md) et [les validations et leurs limites](docs/admin/VALIDATION.md).
+
+`npm run test:admin` lance les parcours navigateur sur un service HTTPS local isolé : aucun compte, e-mail ni produit de production n’est modifié. Les nouvelles tables/politiques ne sont jamais installées automatiquement.
+
+## Sprint MVP — validation STAGING
+
+Le panier, le devis côté serveur, les commandes de test, les zones de livraison et la revue manuelle à deux administrateurs sont préparés derrière des verrouillages STAGING. Aucun paiement réel ou téléchargement payant n'est activé. La reproduction fidèle de products et le correctif ACL sont fournis pour revue, sans exécution distante.
+
+Voir [le rapport et les étapes manuelles](docs/SPRINT-MVP-STAGING.md), [les métadonnées confirmées de products](docs/security/PRODUCTS-CONFIRMED-SCHEMA.md) et [les résultats de validation locale](docs/admin/VALIDATION.md). La PR reste à examiner ; aucune fusion automatique.
+
+Publication du catalogue seul : [procédure minimale](docs/PUBLISH-CATALOG.md). Contrôle local sans réseau : `npm run check:deployment -- production` (ou `preview` dans son environnement dédié).
