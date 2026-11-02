@@ -410,6 +410,16 @@ try {
         });
         assert.equal(response.status(), 200);
         assert.equal((await response.json()).quote.canOrder, false);
+        const download = await page.request.get(
+          base + `/api/digital/${rows[0].id}/download?paid=true`,
+        );
+        assert.equal(download.status(), 404);
+        assert.equal(download.headers().location, undefined);
+        await page.goto(base + "/admin/digital/releases");
+        await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+          "Versions numériques indisponibles",
+        );
+        await expect(page.locator('input[name="sha256"]')).toHaveCount(0);
         assert.equal(JSON.stringify(rows), before);
       } finally {
         missingMigrations = false;

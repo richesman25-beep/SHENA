@@ -94,3 +94,39 @@ test("a declared local staging cannot use production and production cannot use s
     }),
   );
 });
+
+import {
+  isApprovedCommerce,
+  isApprovedDigitalDelivery,
+  shenaProductionOrigin,
+} from "../src/lib/supabase/deployment";
+test("production activation requires exact identity and separate explicit modes", () => {
+  const prod = {
+    VERCEL_ENV: "production",
+    SHENA_DEPLOYMENT_TARGET: "production",
+    SHENA_CHECKOUT_MODE: "production-reviewed",
+  };
+  assert.equal(isApprovedCommerce(shenaProductionOrigin, prod), true);
+  for (const env of [
+    { ...prod, SHENA_CHECKOUT_MODE: "disabled" },
+    { ...prod, SHENA_DEPLOYMENT_TARGET: undefined },
+    { ...prod, VERCEL_ENV: "preview" },
+  ])
+    assert.equal(isApprovedCommerce(shenaProductionOrigin, env), false);
+  assert.equal(isApprovedCommerce(shenaStagingOrigin, prod), false);
+  assert.equal(isApprovedDigitalDelivery(shenaProductionOrigin, prod), false);
+  assert.equal(
+    isApprovedDigitalDelivery(shenaProductionOrigin, {
+      ...prod,
+      SHENA_DIGITAL_DOWNLOADS_MODE: "production-reviewed",
+    }),
+    true,
+  );
+  assert.equal(
+    isApprovedDigitalDelivery(shenaStagingOrigin, {
+      ...prod,
+      SHENA_DIGITAL_DOWNLOADS_MODE: "production-reviewed",
+    }),
+    false,
+  );
+});

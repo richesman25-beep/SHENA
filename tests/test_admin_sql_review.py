@@ -37,6 +37,74 @@ class SqlReviewTests(unittest.TestCase):
         self.assertIn("shena.backup_restore_verified", text)
         self.assertNotIn("SHENA_STAGING_TESTS_HERE", text)
 
+    def test_activation_review_and_persistent_sql_are_separate_and_gated(self):
+        spec = importlib.util.spec_from_file_location("activation", ROOT / "scripts/prepare-production-activation.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        for name, source in module.SOURCES.items():
+            review = (ROOT / source).read_text()
+            self.assertEqual(parse_sql(review)[-1].stmt.kind.name, "TRANS_STMT_ROLLBACK")
+            persistent = module.prepare(name)
+            path = ROOT / "docs/proposals/production-activation/persistent" / (name + ".sql")
+            self.assertEqual(persistent, path.read_text())
+            statements = parse_sql(persistent)
+            self.assertEqual(statements[-1].stmt.kind.name, "TRANS_STMT_COMMIT")
+            self.assertEqual(sum(getattr(getattr(x.stmt, "kind", None), "name", None)=="TRANS_STMT_COMMIT" for x in statements), 1)
+            self.assertTrue(parse_plpgsql(persistent))
+            self.assertIn("shena.backup_manifest_sha256", persistent)
+            self.assertIn("shena.approved_script", persistent)
+            self.assertNotIn("SHENA_STAGING_TESTS_HERE", persistent)
+        inventory=(ROOT / "docs/proposals/production-activation/00-inventory-readonly.sql").read_text()
+        for item in parse_sql(inventory):
+            self.assertIn(type(item.stmt).__name__, ("SelectStmt", "TransactionStmt", "VariableSetStmt"))
+
+    def test_founder_generator_rejects_duplicates_and_keeps_metadata_authority(self):
+        spec=importlib.util.spec_from_file_location("founders", ROOT / "scripts/prepare-founder-roles.py")
+        module=importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        for a,b in [("a@example.test","a@example.test"),("a';DROP TABLE x;--@example.test","b@example.test")]:
+            with self.assertRaises(ValueError): module.prepare(a,b)
+        sql=module.prepare("a@example.test","b@example.test")
+        self.assertTrue(parse_sql(sql))
+        self.assertTrue(parse_plpgsql(sql))
+        self.assertIn("email_confirmed_at IS NOT NULL",sql)
+        self.assertIn("UPDATE auth.users SET raw_app_meta_data",sql)
+        self.assertNotIn("raw_user_meta_data",sql)
+        self.assertNotIn("password",sql)
+
+    def test_enabling_requires_real_business_inputs_and_remains_unexecuted(self):
+        spec=importlib.util.spec_from_file_location("enable", ROOT / "scripts/prepare-commerce-enablement.py")
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        for minutes,accounts,manual,digital in [(0,[],False,False),(True,[],False,False),(60,[],True,False),(60,[],False,True)]:
+            with self.assertRaises(ValueError): module.prepare(minutes,accounts,manual,digital)
+        accounts=[{"provider":"moncash","display_name":"Fixture only","account_identifier":"FIXTURE ONLY","approval_evidence":"Preuve synthétique de test"}]
+        text=module.prepare(60,accounts,True,True)
+        self.assertTrue(parse_sql(text));self.assertTrue(parse_plpgsql(text))
+        self.assertIn("shena.security_tests_verified",text)
+        self.assertIn("cron.schedule",text)
+        self.assertNotIn("CREATE EXTENSION",text)
+
+    def test_backup_checker_detects_tampering_and_does_not_certify_restore(self):
+        import tempfile,hashlib
+        spec=importlib.util.spec_from_file_location("backup", ROOT / "scripts/check-backup-artifacts.py")
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            def artifact(name,content):
+                (root/name).write_bytes(content)
+                return {"path":name,"sha256":hashlib.sha256(content).hexdigest()}
+            row={"bucket_id":"digital-products","object_path":"fixture.pdf"}
+            data={"project_ref":"xxadpoebcslutlevzdsy","database_dump":artifact("database.dump",b"SYNTHETIC ONLY"),"database_restore_evidence":artifact("restore-evidence.json",b"{}"),"storage_inventory":artifact("inventory.json",json.dumps([row]).encode()),"storage_objects":[dict(row,backup=artifact("saved.pdf",b"PDF FIXTURE"),restored_copy=artifact("restored.pdf",b"PDF FIXTURE"))]}
+            manifest=root/"manifest.json";manifest.write_text(json.dumps(data))
+            result=module.verify(manifest)
+            self.assertTrue(result["artifact_integrity"])
+            self.assertFalse(result["database_restore_verified"])
+            self.assertFalse(result["approval_granted"])
+            (root/"restored.pdf").write_bytes(b"TAMPERED")
+            with self.assertRaises(ValueError):module.verify(manifest)
+            data["storage_objects"]=[];manifest.write_text(json.dumps(data))
+            with self.assertRaises(ValueError):module.verify(manifest)
+
     def test_plpgsql_syntax(self):
         # Vérifie aussi les corps DO et PL/pgSQL, sans les évaluer.
         for relative in ("docs/proposals/production-01-admin-reviewed.sql", "docs/proposals/tests/admin-products-staging.sql"):

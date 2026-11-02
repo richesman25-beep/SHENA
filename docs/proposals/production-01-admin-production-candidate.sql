@@ -143,7 +143,7 @@ CREATE FUNCTION public.shena_is_admin() RETURNS boolean
  LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp
  AS $body$
  SELECT EXISTS(SELECT 1 FROM auth.users u
-   WHERE u.id=(SELECT auth.uid())
+   WHERE u.id=(SELECT auth.uid()) AND u.email_confirmed_at IS NOT NULL
      AND u.raw_app_meta_data->'shena_role'='"admin"'::jsonb)
  $body$;
 ALTER FUNCTION public.shena_is_admin() OWNER TO postgres;

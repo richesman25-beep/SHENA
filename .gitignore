@@ -14,3 +14,5 @@ next-env.d.ts
 __pycache__/
 
 .vercel/
+
+.shena-backups/

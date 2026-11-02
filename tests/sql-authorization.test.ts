@@ -45,9 +45,9 @@ test("Modèle PostgreSQL local: authentification admin et métadonnées, hors co
       },
     );
     await t.test(
-      "Correctif ACL final : essais réservés au vrai SHENA-STAGING après reproduction exacte",
+      "Correctif ACL final : aucune exécution distante sans sauvegarde et approbation",
       {
-        skip: "Instruction du propriétaire : aucun essai local du correctif final, notamment MAINTAIN.",
+        skip: "Aucun essai local du correctif final, notamment MAINTAIN ; les modèles métier sont distincts.",
       },
       async () => {},
     );

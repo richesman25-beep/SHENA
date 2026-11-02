@@ -6,7 +6,7 @@ import {
   existingProductColumns,
   type ExistingProduct,
 } from "../supabase/config";
-import { isStagingCheckout } from "../supabase/deployment";
+import { isApprovedCommerce } from "../supabase/deployment";
 import {
   calculateServerQuote,
   CheckoutError,
@@ -21,7 +21,7 @@ export type CommerceCapabilities = {
 export async function commerceContext() {
   try {
     const config = getSupabaseConfig();
-    if (!config || !isStagingCheckout(config.url, process.env)) return null;
+    if (!config || !isApprovedCommerce(config.url, process.env)) return null;
     const client = await sessionClient();
     if (!client) return null;
     const result = await client.rpc("shena_checkout_features");

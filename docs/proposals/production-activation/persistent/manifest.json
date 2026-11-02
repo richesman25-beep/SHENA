@@ -1,0 +1,12 @@
+{
+  "project_ref": "xxadpoebcslutlevzdsy",
+  "proposed_not_executed": true,
+  "files": {
+    "00-products-acl.sql": "1839b3cbab5345c6ea1b8fb741afe12692a0b89ef0b1e1d62808c94973fbce7f",
+    "01-admin.sql": "3cbfe1b543e359cd784ad6d6d120925ec8e91475586fdb128ab57f0eacee2af2",
+    "02-commerce.sql": "4e40a4cfbfc0a40064f41f54a37986cbcf2cd6e6305a92e59ba37329ea0ebe6f",
+    "02-storage-acl.sql": "1b23c0c8a9f51a4af7a544613178752423b984de73e50843c6ec893fb1599b9d",
+    "03-storage.sql": "c55ed98d1dd2335062184024d08fee4305325f6238c51f7a78bac30ed804636e",
+    "04-digital-delivery.sql": "01638155f951ca6ba0a382a47f4354c338d1d64092e3e4a7924e00a5153196b7"
+  }
+}

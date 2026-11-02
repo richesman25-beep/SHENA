@@ -39,3 +39,30 @@ export function isStagingCheckout(url: string, env: DeploymentEnvironment) {
     url === shenaStagingOrigin
   );
 }
+
+/** Activation Production explicite : ces valeurs ne sont jamais définies automatiquement. */
+export const shenaProductionProjectRef = "xxadpoebcslutlevzdsy";
+export const shenaProductionOrigin = `https://${shenaProductionProjectRef}.supabase.co`;
+export function isProductionIdentity(url: string, env: DeploymentEnvironment) {
+  return (
+    env.VERCEL_ENV === "production" &&
+    env.SHENA_DEPLOYMENT_TARGET === "production" &&
+    url === shenaProductionOrigin
+  );
+}
+export function isApprovedCommerce(url: string, env: DeploymentEnvironment) {
+  return (
+    isStagingCheckout(url, env) ||
+    (isProductionIdentity(url, env) &&
+      env.SHENA_CHECKOUT_MODE === "production-reviewed")
+  );
+}
+export function isApprovedDigitalDelivery(
+  url: string,
+  env: DeploymentEnvironment,
+) {
+  return (
+    isProductionIdentity(url, env) &&
+    env.SHENA_DIGITAL_DOWNLOADS_MODE === "production-reviewed"
+  );
+}
