@@ -1,24 +1,26 @@
-# Publication minimale du catalogue SHENA
+# Publication Production — catalogue SHENA
 
-La PR #3 est l'unique PR finale de ce travail. Aucun compte réel n'est créé, aucune migration Supabase ni fusion automatique n'est exécutée.
+La PR #3 reste l'unique PR d'intégration vers main. Aucune fusion automatique ni migration de base n'est autorisée.
 
-1. Vérifier les contrôles de la dernière révision de la PR ; examiner puis fusionner manuellement vers main lorsque validée.
-2. Sur le projet Vercel de référence **shena-2go5**, conserver les variables publiques du projet Supabase Production existant, `SHENA_CATALOG_MODE=live` et `SHENA_CHECKOUT_MODE=disabled`. Ne pas définir `SHENA_DEPLOYMENT_TARGET=staging` en Production. Ne pas exposer de clé secrète.
-3. Le déploiement main peut alors publier le catalogue existant sans migration. Panier local et devis restent disponibles ; création de commande Production, paiement et téléchargement payant restent désactivés dans le code.
-4. Vérifier accueil, boutique, recherche/filtres, images, SHENA Digital et mobile. Si une régression apparaît, rétablir le précédent déploiement Vercel ; aucun retour arrière SQL n'est nécessaire pour cette publication du code seul.
+## Version publiable sans migration
 
-Contrôle automatisé de configuration, sans réseau ni mutation : `npm run check:deployment -- production`. Ce contrôle ne certifie pas les droits SQL ni la disponibilité distante du catalogue.
+- Catalogue Supabase réel, produits et images conservés ; recherche, filtres, panier local et devis serveur réutilisés.
+- Projet Vercel de référence : shena-2go5 ; branche Production : main.
+- Variables publiques Supabase et SHENA_SITE_URL existantes préservées. Drapeaux Production explicitement préparés : SHENA_CATALOG_MODE=live et SHENA_CHECKOUT_MODE=disabled.
+- Commandes Production, paiements et téléchargements payants désactivés. L'administration refuse les écritures si les capacités SQL nécessaires ne sont pas installées.
+- Aucun passage par SHENA-STAGING n'est requis pour publier le catalogue. Les anciens documents de recette STAGING restent des archives techniques, pas des étapes demandées au propriétaire.
 
-## Accès indispensables pour poursuivre à distance
+Le contrôle public réel de Production a retourné HTTP 200 sur les produits actifs et HTTP 206 sur une image existante. Aucune donnée n'a été modifiée. `npm run check:deployment -- production` vérifie aussi la cohérence de configuration sans réseau.
 
-- Accès Vercel limité au projet de référence, pour configurer les variables **Preview uniquement** et reconstruire. Les quatre statuts Vercel associés au dépôt ne prouvent pas qu'ils utilisent tous STAGING.
-- Clé publishable SHENA-STAGING et accès SQL/opérateur sécurisés au seul projet `prqmomjtmyhqijysfoog`, domaine autorisé dans l'environnement. Trois identités STAGING distinctes (client et deux admins) sont nécessaires ; les adresses administrateur doivent être confirmées, sans compte fictif ni mot de passe intégré. Aucun secret dans le chat/Git.
-- Revue/accord sur les recettes SQL et sur toute future installation persistante. Les fichiers existants gardent ROLLBACK. Les essais STAGING ne valent pas autorisation de modification Production.
+## SQL préparé, non exécuté
 
-Les scripts de création, ACL, admin, Storage et commerce sont déjà prêts pour revue ; voir docs/SPRINT-MVP-STAGING.md. Le correctif final TRUNCATE n'a pas été exécuté. Avant toute modification Production : script persistant explicitement validé, sauvegarde restaurable vérifiée et accord. La vulnérabilité ACL rapportée reste ouverte jusque-là, indépendamment du déploiement du catalogue.
+1. `docs/proposals/production-00-products-acl-revoke-reviewed.sql` retire les sept privilèges dangereux, dont TRUNCATE, et conserve SELECT/RLS. Les droits hérités et les métadonnées inattendues font arrêter le script.
+2. `docs/proposals/production-01-admin-production-candidate.sql` adapte le contexte opératoire de la migration admin déjà revue au projet Production connu. Les types et la politique correspondent aux métadonnées fournies ; les données historiques et le propriétaire restent à vérifier. Aucun compte ni donnée n'est corrigé automatiquement.
 
-## Preview
+Les deux fichiers restent des propositions avec ROLLBACK final, pas des installations persistantes. Les gardes de session ne prouvent ni l'identité du projet ni une restauration. Avant toute modification réelle de la base : sauvegarde restaurée/vérifiée, revue d'un script persistant et approbation explicite distincte. Le privilège TRUNCATE rapporté reste ouvert jusque-là ; la publication du code ne le révoque pas.
 
-Utiliser uniquement les variables publiques SHENA-STAGING, `SHENA_DEPLOYMENT_TARGET=staging`, `SHENA_STAGING_PROJECT_REF=prqmomjtmyhqijysfoog`, `SHENA_CHECKOUT_MODE=disabled` et une origine `SHENA_SITE_URL` correspondant au domaine Vercel de Preview. Contrôle : `npm run check:deployment -- preview` dans ce contexte. Le bandeau signale que seules des données fictives sont admises.
+## Dernière validation de publication
 
-L'activation de commandes STAGING exige ensuite les tests serveur/RLS réels et les tables revues. Les tarifs et la durée de réservation restent des décisions du propriétaire ; ils ne bloquent pas la publication du catalogue seul.
+Préparer le build Vercel Production avec `--prod --skip-domain` pour garder les domaines publics sur le déploiement actuel. Après accord du propriétaire : intégrer la PR vers main, vérifier le build correspondant, puis publier/promouvoir la version approuvée. Ne pas modifier la base dans cette opération.
+
+Retour arrière du code : rétablir le précédent déploiement Vercel validé, sans changement SQL. La correction des ACL et l'activation de l'administration sont une opération distincte ; elles ne doivent pas bloquer le catalogue seul.

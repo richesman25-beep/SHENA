@@ -12,3 +12,5 @@ next-env.d.ts
 .next-admin-test/
 
 __pycache__/
+
+.vercel/

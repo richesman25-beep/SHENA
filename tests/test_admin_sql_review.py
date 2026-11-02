@@ -19,12 +19,23 @@ class SqlReviewTests(unittest.TestCase):
             "docs/proposals/staging/02-storage-review.sql",
             "docs/proposals/staging/03-commerce-review.sql",
             "docs/proposals/production-01-admin.sql",
+            "docs/proposals/production-01-admin-production-candidate.sql",
             "docs/proposals/production-01-admin-reviewed.sql",
             "docs/proposals/production-01-admin-inventory.sql",
             "docs/proposals/tests/admin-products-staging.sql",
         ):
             with self.subTest(file=relative):
                 self.assertTrue(parse_sql((ROOT / relative).read_text()))
+
+    def test_production_candidate_is_gated_and_remains_rollback(self):
+        text = (ROOT / "docs/proposals/production-01-admin-production-candidate.sql").read_text()
+        statements = parse_sql(text)
+        self.assertTrue(parse_plpgsql(text))
+        self.assertEqual(statements[-1].stmt.kind.name, "TRANS_STMT_ROLLBACK")
+        self.assertNotIn("TRANS_STMT_COMMIT", [getattr(getattr(s.stmt, "kind", None), "name", None) for s in statements])
+        self.assertIn("production-reviewed", text)
+        self.assertIn("shena.backup_restore_verified", text)
+        self.assertNotIn("SHENA_STAGING_TESTS_HERE", text)
 
     def test_plpgsql_syntax(self):
         # Vérifie aussi les corps DO et PL/pgSQL, sans les évaluer.
