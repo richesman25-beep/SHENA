@@ -45,7 +45,9 @@ try {
   if (products.error) {
     failed = true;
     console.log(
-      "Le schéma doit être préparé et approuvé avant les tests de rôles. Aucun DDL n’est exécuté par ce script.",
+      ["PGRST205", "42P01"].includes(products.error.code || "")
+        ? "Table products absente : préparation du schéma à examiner. Aucun DDL exécuté."
+        : "Connexion ou lecture STAGING indisponible : vérifier DNS, réseau, clé publique et autorisations. Aucune conclusion sur le schéma ; aucun DDL exécuté.",
     );
   }
   const features = await client.rpc("shena_catalog_features");
