@@ -12,7 +12,8 @@
     "test:e2e": "playwright test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test:e2e:live": "SHENA_E2E_MODE=live playwright test"
+    "test:e2e:live": "SHENA_E2E_MODE=live playwright test",
+    "test:admin": "node scripts/test-admin.mjs"
   },
   "repository": {
     "type": "git",

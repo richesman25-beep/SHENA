@@ -6,8 +6,8 @@ export default async function Categories() {
   const { client, capabilities } = context;
   if (!capabilities?.categories)
     return (
-      <section className="admin-panel">
-        <h2>Gestion des catégories en attente</h2>
+      <section className="workspace-panel">
+        <h1>Gestion des catégories en attente</h1>
         <p>
           public.products ne contient aucune catégorie. Les tables categories et
           product_categories et leurs politiques sont proposées séparément.
@@ -28,12 +28,19 @@ export default async function Categories() {
     );
   return (
     <>
+      <div className="workspace-page-heading">
+        <div>
+          <span className="eyebrow">CLASSEMENT DU CATALOGUE</span>
+          <h1>Catégories</h1>
+          <p>Organisez les produits sans changer leur type.</p>
+        </div>
+      </div>
       <div className="admin-two-columns">
-        <section className="admin-panel">
+        <section className="workspace-panel">
           <h2>Ajouter une catégorie</h2>
           <CategoryForm enabled />
         </section>
-        <section className="admin-panel">
+        <section className="workspace-panel">
           <h2>Associer un produit</h2>
           <AssignCategoryForm products={products.data} categories={cats.data} />
         </section>
@@ -41,7 +48,7 @@ export default async function Categories() {
       <h2>Catégories existantes</h2>
       <div className="admin-tiles">
         {cats.data.map((c) => (
-          <section className="admin-panel" key={c.id}>
+          <section className="workspace-panel" key={c.id}>
             <CategoryForm category={c} enabled />
           </section>
         ))}

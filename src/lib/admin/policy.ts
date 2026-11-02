@@ -11,7 +11,13 @@ export function hasAdminRole(
   return user?.app_metadata?.shena_role === "admin";
 }
 export type AdminCapabilities = {
-  version: 1;
+  version: 1 | 2;
+  mediaManage: boolean;
+  categoryLinks: boolean;
+  mediaDelete: boolean;
+  audit: boolean;
+  digitalMetadata: boolean;
+  extendedDigitalUploads: boolean;
   products: boolean;
   categories: boolean;
   geography: boolean;
@@ -21,9 +27,16 @@ export type AdminCapabilities = {
 export function parseCapabilities(value: unknown): AdminCapabilities | null {
   if (!value || typeof value !== "object") return null;
   const v = value as Record<string, unknown>;
-  if (v.version !== 1) return null;
+  if (v.version !== 1 && v.version !== 2) return null;
   return {
-    version: 1,
+    version: v.version,
+    mediaManage: v.version === 2 && v.mediaManage === true,
+    categoryLinks: v.version === 2 && v.categoryLinks === true,
+    mediaDelete: v.version === 2 && v.mediaDelete === true,
+    audit: v.version === 2 && v.audit === true,
+    digitalMetadata: v.version === 2 && v.digitalMetadata === true,
+    extendedDigitalUploads:
+      v.version === 2 && v.extendedDigitalUploads === true,
     products: v.products === true,
     categories: v.categories === true,
     geography: v.geography === true,

@@ -4,8 +4,8 @@ export default async function GeographyAdmin() {
   if (!context) return null;
   const { capabilities } = context;
   return (
-    <section className="admin-panel">
-      <h2>Stocks par emplacement</h2>
+    <section className="workspace-panel">
+      <h1>Stocks par emplacement</h1>
       <p>
         Le stock actuel de public.products est global. Il ne permet pas de
         déduire la quantité à Hinche, Maïssade, Cap-Haïtien ou Port-au-Prince.

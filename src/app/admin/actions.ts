@@ -1,4 +1,5 @@
 "use server";
+import { validatePrivateFile } from "@/lib/admin/digital";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { sessionClient } from "@/lib/supabase/server";
@@ -10,8 +11,13 @@ import {
 } from "@/lib/admin/policy";
 import { existingProductColumns } from "@/lib/supabase/config";
 import { processProductImage } from "@/lib/admin/media";
+import { productRevision } from "@/lib/admin/products";
 import { normalizeProductType } from "@/lib/product-adapter";
-export type ActionState = { error?: string; success?: string };
+export type ActionState = {
+  error?: string;
+  success?: string;
+  productId?: string;
+};
 export async function loginAction(
   _previous: ActionState,
   form: FormData,
@@ -51,31 +57,104 @@ export async function saveProductAction(
 
     const id = String(form.get("id") || "");
     if (id && !validUuid(id)) return { error: "Identifiant invalide." };
-    let existingType: string | undefined;
+    let current: import("@/lib/supabase/config").ExistingProduct | undefined;
     if (id) {
-      const current = await client
+      const found = await client
         .from("products")
-        .select("product_type")
+        .select(existingProductColumns)
         .eq("id", id)
         .single();
-      if (current.error) return { error: "Produit inaccessible." };
-      existingType = current.data.product_type;
+      if (found.error || !found.data) return { error: "Produit inaccessible." };
+      current = found.data;
+      if (String(form.get("revision") || "") !== productRevision(current!))
+        return {
+          error:
+            "Ce produit a été modifié depuis son ouverture. Rechargez la page avant de réessayer.",
+        };
     }
-    const values = validateProductForm(form, existingType);
-    // Aucune colonne inconnue, aucun rôle service : le JWT utilisateur reste soumis à RLS.
-    const result = id
-      ? await client
-          .from("products")
-          .update(values)
-          .eq("id", id)
-          .select("id")
-          .single()
-      : await client.from("products").insert(values).select("id").single();
-    if (result.error)
-      return {
-        error:
-          "Enregistrement refusé par la base. Vérifiez les politiques, contraintes et types autorisés.",
-      };
+    const values = validateProductForm(form, current?.product_type);
+    if (
+      current &&
+      current.active !== values.active &&
+      form.get("confirm_visibility") !== "on"
+    )
+      return { error: "Confirmez explicitement le changement de publication." };
+    if (current) {
+      let query = client
+        .from("products")
+        .update(values)
+        .eq("id", id)
+        .eq("name", current.name)
+        .eq("price_htg", current.price_htg)
+        .eq("product_type", current.product_type)
+        .eq("active", current.active);
+      query =
+        current.stock === null
+          ? query.is("stock", null)
+          : query.eq("stock", current.stock);
+      query =
+        current.description === null
+          ? query.is("description", null)
+          : query.eq("description", current.description);
+      query =
+        current.image_url === null
+          ? query.is("image_url", null)
+          : query.eq("image_url", current.image_url);
+      const saved = await query.select("id").maybeSingle();
+      if (saved.error)
+        return {
+          error:
+            "Enregistrement refusé. Vérifiez les autorisations et contraintes.",
+        };
+      if (!saved.data)
+        return {
+          error:
+            "Un autre administrateur a modifié ce produit. Rechargez la page ; rien n’a été écrasé.",
+        };
+    } else {
+      const requestId = String(form.get("request_id") || "");
+      if (!validUuid(requestId))
+        return { error: "Le formulaire a expiré. Rechargez la page." };
+      const saved = await client
+        .from("products")
+        .insert({
+          id: requestId,
+          created_at: new Date().toISOString(),
+          ...values,
+        })
+        .select("id")
+        .single();
+      if (saved.error) {
+        if (saved.error.code === "23505") {
+          const previous = await client
+            .from("products")
+            .select(existingProductColumns)
+            .eq("id", requestId)
+            .single();
+          if (
+            !previous.error &&
+            previous.data &&
+            previous.data.name === values.name &&
+            Number(previous.data.price_htg) === values.price_htg &&
+            previous.data.stock === values.stock &&
+            previous.data.active === values.active &&
+            previous.data.product_type === values.product_type &&
+            previous.data.description === values.description
+          )
+            return {
+              success:
+                "Ce produit a déjà été enregistré. Aucun doublon n’a été créé.",
+              productId: requestId,
+            };
+        }
+        return {
+          error:
+            "Création refusée. Vérifiez les contraintes et types de la table existante.",
+        };
+      }
+      revalidatePath("/", "layout");
+      return { success: "Produit créé dans Supabase.", productId: requestId };
+    }
     revalidatePath("/", "layout");
     return { success: "Produit enregistré dans Supabase." };
   } catch (e) {
@@ -89,7 +168,7 @@ export async function uploadImageAction(
   form: FormData,
 ): Promise<ActionState> {
   try {
-    const { client, userId } = await requireAdmin("images");
+    const { client, userId, capabilities } = await requireAdmin("images");
     await requireAdmin("products");
     const id = String(form.get("id") || "");
     if (!validUuid(id)) return { error: "Produit invalide." };
@@ -111,7 +190,7 @@ export async function uploadImageAction(
     if (error || !product) return { error: "Produit inaccessible." };
     const buffer = Buffer.from(await file.arrayBuffer());
     const image = await processProductImage(buffer);
-    const path = `${userId}/${id}/${crypto.randomUUID()}.webp`;
+    const path = `${capabilities?.mediaManage ? "managed/" : ""}${userId}/${id}/${crypto.randomUUID()}.webp`;
     const upload = await client.storage
       .from("product-images")
       .upload(path, image, { contentType: "image/webp", upsert: false });
@@ -122,17 +201,31 @@ export async function uploadImageAction(
       };
     const image_url = client.storage.from("product-images").getPublicUrl(path)
       .data.publicUrl;
-    const update = await client
-      .from("products")
-      .update({ image_url })
-      .eq("id", id)
-      .select("id")
-      .single();
-    if (update.error)
-      return {
-        error:
-          "Image stockée mais association refusée. Le fichier reste à examiner dans Storage ; aucune ancienne image n’a été supprimée.",
-      };
+    if (capabilities?.mediaManage) {
+      const registered = await client.rpc("shena_register_product_image", {
+        p_product_id: id,
+        p_object_path: path,
+        p_public_url: image_url,
+        p_size: image.length,
+      });
+      if (registered.error)
+        return {
+          error:
+            "Image téléversée, mais association non confirmée. Aucun ancien fichier n’a été supprimé. Vérifiez les médias avant de réessayer.",
+        };
+    } else {
+      const update = await client
+        .from("products")
+        .update({ image_url })
+        .eq("id", id)
+        .select("id")
+        .single();
+      if (update.error)
+        return {
+          error:
+            "Image stockée mais association refusée. Le fichier reste à examiner dans Storage ; aucune ancienne image n’a été supprimée.",
+        };
+    }
     revalidatePath("/", "layout");
     return { success: "Image convertie en WebP et associée au produit." };
   } catch {
@@ -207,13 +300,12 @@ export async function uploadDigitalAction(
   form: FormData,
 ): Promise<ActionState> {
   try {
-    const { client, userId } = await requireAdmin("digital");
+    const { client, userId, capabilities } = await requireAdmin("digital");
     const productId = String(form.get("id") || "");
     const file = form.get("file");
     if (
       !validUuid(productId) ||
       !(file instanceof File) ||
-      file.type !== "application/pdf" ||
       file.size === 0 ||
       file.size > 2 * 1024 * 1024
     )
@@ -229,13 +321,21 @@ export async function uploadDigitalAction(
     )
       return { error: "Produit numérique inaccessible." };
     const bytes = Buffer.from(await file.arrayBuffer());
-    if (bytes.subarray(0, 5).toString() !== "%PDF-")
-      return { error: "Signature PDF invalide." };
-    const object_path = `${userId}/${productId}/${crypto.randomUUID()}.pdf`;
+    const format = validatePrivateFile(
+      file,
+      bytes,
+      capabilities?.extendedDigitalUploads === true,
+    );
+    if (!format)
+      return {
+        error:
+          "Format ou signature refusés. Le fichier reste limité aux formats de quarantaine autorisés.",
+      };
+    const object_path = `${userId}/${productId}/${crypto.randomUUID()}.${format.extension}`;
     const upload = await client.storage
       .from("digital-quarantine")
       .upload(object_path, bytes, {
-        contentType: "application/pdf",
+        contentType: format.mime,
         upsert: false,
       });
     if (upload.error) return { error: "Téléversement privé refusé." };
@@ -245,7 +345,7 @@ export async function uploadDigitalAction(
       object_path,
       original_name: file.name.slice(0, 200),
       size_bytes: file.size,
-      mime_type: "application/pdf",
+      mime_type: format.mime,
       status: "quarantine",
     });
     if (record.error)
@@ -256,9 +356,59 @@ export async function uploadDigitalAction(
     revalidatePath("/admin/digital");
     return {
       success:
-        "PDF conservé en quarantaine privée. Il n’est ni publié ni téléchargeable par les clients. Une analyse de sécurité reste nécessaire.",
+        "Fichier conservé en quarantaine privée. Il n’est ni publié ni téléchargeable par les clients. Une analyse de sécurité reste nécessaire.",
     };
   } catch {
     return { error: "Téléversement numérique non autorisé ou indisponible." };
+  }
+}
+
+export async function setPublicationAction(
+  _previous: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const { client } = await requireAdmin("products");
+    const id = String(form.get("id") || "");
+    if (!validUuid(id)) return { error: "Produit invalide." };
+    const found = await client
+      .from("products")
+      .select(existingProductColumns)
+      .eq("id", id)
+      .single();
+    if (found.error || !found.data) return { error: "Produit inaccessible." };
+    const current = found.data;
+    if (
+      String(form.get("confirmation_name") || "").trim() !== current.name ||
+      String(form.get("revision") || "") !== productRevision(current)
+    )
+      return {
+        error:
+          "Confirmez le nom exact du produit et rechargez la page s’il a changé.",
+      };
+    const active = form.get("target_active") === "true";
+    if (active === current.active)
+      return { success: "La publication est déjà dans cet état." };
+    const result = await client
+      .from("products")
+      .update({ active })
+      .eq("id", id)
+      .eq("active", current.active)
+      .eq("name", current.name)
+      .select("id")
+      .maybeSingle();
+    if (result.error || !result.data)
+      return {
+        error:
+          "La publication n’a pas été modifiée. Vérifiez les permissions ou rechargez la page.",
+      };
+    revalidatePath("/", "layout");
+    return {
+      success: active
+        ? "Produit publié."
+        : "Produit dépublié du catalogue. Le produit et ses dépendances sont conservés.",
+    };
+  } catch {
+    return { error: "Modification de publication non autorisée." };
   }
 }
