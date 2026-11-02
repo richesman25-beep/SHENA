@@ -14,12 +14,12 @@ export default async function Boutique({
         <span className="eyebrow">LES UNIVERS SHENA</span>
         <h1>La boutique.</h1>
         <p>
-          Des essentiels pour vous, votre maison et vos projets. Catalogue de
-          démonstration.
+          Des essentiels pour vous, votre maison et vos projets. Commandes
+          indisponibles pour cette phase.
         </p>
       </div>
       <div className="catalog-layout">
-        <Catalog filters={filters} />
+        <Catalog key={JSON.stringify(filters)} filters={filters} />
       </div>
     </div>
   );

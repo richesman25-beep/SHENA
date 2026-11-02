@@ -46,7 +46,7 @@ const content: Record<
     title: "Confidentialité.",
     intro: "Information provisoire pour cette démonstration.",
     paragraphs: [
-      "Cette version ne crée aucun compte client et n’envoie aucune commande à une base de données. Elle conserve les identifiants et quantités du panier dans le stockage local de votre navigateur. Retirez les articles ou effacez les données du site pour les supprimer.",
+      "Cette version ne crée aucun compte client et n’envoie aucune commande à une base de données. Elle conserve les identifiants et quantités du panier ainsi que votre choix manuel de département et de commune dans le stockage local de votre navigateur. Retirez les articles ou effacez les données du site pour les supprimer.",
       "Aucun outil de publicité ou d’analyse d’audience n’est intégré. L’hébergeur peut traiter les données techniques nécessaires au fonctionnement du site selon sa propre configuration.",
       "Avant l’activation des comptes et des ventes, préciser l’identité du responsable de traitement, les finalités, les bases applicables, les destinataires, les durées de conservation, les transferts éventuels et les moyens d’exercer vos droits. Aucune conformité juridique certifiée n’est revendiquée.",
     ],

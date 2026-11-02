@@ -1,0 +1,2 @@
+# Parseur PostgreSQL uniquement. Aucun moteur ni pilote de base.
+pglast==7.22

@@ -7,3 +7,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Organisation souhaitée par le propriétaire
+
+Conserver un seul dépôt GitHub, richesman25-beep/SHENA, et centraliser les modifications sur main. Travailler sur main par défaut ; ne pas multiplier les branches de fonctionnalité sans demande explicite du propriétaire. Conserver l’historique et les modifications existantes. Les migrations et modifications Supabase restent soumises à l’approbation explicite déjà exigée.

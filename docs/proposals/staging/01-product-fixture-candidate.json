@@ -1,0 +1,9 @@
+{
+  "name": "SHENA STAGING — PRODUIT FICTIF",
+  "description": "Fixture technique uniquement : aucun achat, paiement ou téléchargement.",
+  "price_htg": 100,
+  "product_type": "physical",
+  "stock": 3,
+  "image_url": null,
+  "active": false
+}

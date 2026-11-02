@@ -1,10 +1,10 @@
+"use client";
+import { useCatalog } from "./catalog-provider";
+import { CatalogStatus } from "./catalog-status";
+import { useLocation } from "./location-provider";
+import { LocationPicker } from "./location-picker";
 import Link from "next/link";
-import {
-  categories,
-  filterProducts,
-  products,
-  type Filters,
-} from "@/lib/catalog";
+import { filterProducts, type Filters } from "@/lib/catalog";
 import { ProductCard } from "./product-card";
 export function Catalog({
   filters,
@@ -13,11 +13,17 @@ export function Catalog({
   filters: Filters;
   digital?: boolean;
 }) {
+  const { products, categories, mode, status } = useCatalog();
+  const { location } = useLocation();
   const effective = {
     ...filters,
     ...(digital ? { category: "numerique" } : {}),
   };
-  const result = filterProducts(effective);
+  const result = filterProducts(
+    { ...effective, near: mode === "demo" ? effective.near : undefined },
+    products,
+    mode === "demo" ? location : null,
+  );
   function pageLink(page: number) {
     const query = new URLSearchParams();
     Object.entries(effective).forEach(([k, v]) => {
@@ -30,6 +36,36 @@ export function Catalog({
     <>
       <form className="filters" action={digital ? "/numerique" : "/boutique"}>
         <div className="filter-title">Affiner votre sélection</div>
+        {!digital && (
+          <div className="geographic-filter">
+            <LocationPicker compact />
+            <label className="near-checkbox">
+              <input
+                type="checkbox"
+                name="near"
+                value="1"
+                defaultChecked={filters.near === "1"}
+                disabled={!location || mode !== "demo"}
+              />
+              Disponible près de moi
+            </label>
+            {(mode !== "demo" || !location) && (
+              <small>
+                {mode === "demo"
+                  ? "Choisissez une commune pour activer ce filtre."
+                  : "Stocks géographiques réels non configurés."}
+              </small>
+            )}
+            <Link href="/boutique" className="country-filter">
+              Voir les produits dans toute Haïti
+            </Link>
+            <small>
+              {mode === "demo"
+                ? "Stocks fictifs · Aucune distance routière calculée"
+                : "Le stock global ne permet pas de déduire un emplacement."}
+            </small>
+          </div>
+        )}
         <label>
           Rechercher
           <input
@@ -70,7 +106,8 @@ export function Catalog({
               ...new Set(
                 products
                   .filter((p) => !digital || p.type === "digital")
-                  .map((p) => p.brand),
+                  .map((p) => p.brand)
+                  .filter(Boolean),
               ),
             ].map((b) => (
               <option key={b}>{b}</option>
@@ -116,7 +153,9 @@ export function Catalog({
         <label>
           Trier par
           <select name="sort" defaultValue={filters.sort || ""}>
-            <option value="">Pertinence</option>
+            <option value="">
+              {location ? "Proximité administrative" : "Pertinence"}
+            </option>
             <option value="newest">Nouveautés de démo</option>
             <option value="price-asc">Prix croissant</option>
             <option value="price-desc">Prix décroissant</option>
@@ -131,9 +170,11 @@ export function Catalog({
       </form>
       <div className="catalog-results">
         <p className="result-count">
-          {result.total} produit{result.total !== 1 ? "s" : ""} de démonstration
+          <CatalogStatus />
+          {result.total} produit{result.total !== 1 ? "s" : ""}{" "}
+          {mode === "demo" ? "de démonstration" : "du catalogue"}
         </p>
-        {result.items.length ? (
+        {status !== "ready" ? null : result.items.length ? (
           <div className="product-grid catalog-grid">
             {result.items.map((p) => (
               <ProductCard key={p.id} product={p} />

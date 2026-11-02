@@ -8,11 +8,13 @@ export function Purchase({ product }: { product: Product }) {
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
   const limit =
-    product.type === "digital"
-      ? 1
-      : product.type === "stock"
-        ? product.stock
-        : 10;
+    product.type === "unknown"
+      ? 0
+      : product.type === "digital"
+        ? 1
+        : product.type === "stock"
+          ? product.stock
+          : 10;
   return (
     <div className="purchase">
       <label>
@@ -40,7 +42,9 @@ export function Purchase({ product }: { product: Product }) {
           setAdded(true);
         }}
       >
-        Ajouter au panier démo
+        {product.source === "supabase"
+          ? "Ajouter au panier local"
+          : "Ajouter au panier démo"}
       </button>
       {added && (
         <p role="status">
@@ -51,7 +55,9 @@ export function Purchase({ product }: { product: Product }) {
         </p>
       )}
       <small>
-        Prix indicatifs. Aucune commande ni aucun paiement ne sera effectué.
+        {product.source === "supabase"
+          ? "Le panier ne réserve aucun stock. Prix à revérifier côté serveur avant toute future commande."
+          : "Prix indicatifs. Aucune commande ni aucun paiement ne sera effectué."}
       </small>
     </div>
   );

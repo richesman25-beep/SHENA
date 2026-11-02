@@ -1,11 +1,20 @@
 "use client";
-import Image from "next/image";
+import { CartShippingPreview } from "./cart-shipping-preview";
+import { ProductVisual } from "./product-visual";
 import Link from "next/link";
+import { CatalogStatus } from "./catalog-status";
+import { useCatalog } from "./catalog-provider";
 import { useCart } from "./cart-provider";
-import { products, money, typeLabel } from "@/lib/catalog";
+import { money, typeLabel } from "@/lib/catalog";
 import { cartTotal } from "@/lib/cart";
-export function CartView() {
+export function CartView({
+  orderingEnabled = false,
+}: {
+  orderingEnabled?: boolean;
+}) {
+  const { products, mode, status } = useCatalog();
   const { lines, ready, update } = useCart();
+  if (status !== "ready") return <CatalogStatus />;
   if (!ready) return <p role="status">Chargement du panier…</p>;
   if (!lines.length)
     return (
@@ -31,11 +40,11 @@ export function CartView() {
           return (
             <article className="cart-line" key={line.id}>
               <Link href={`/produit/${p.slug}`}>
-                <Image
-                  src={`/products/${p.image}.svg`}
-                  alt={p.name}
-                  width={125}
-                  height={125}
+                <ProductVisual
+                  image={p.image}
+                  name={p.name}
+                  url={p.imageUrl}
+                  live={p.source === "supabase"}
                 />
               </Link>
               <div>
@@ -74,10 +83,11 @@ export function CartView() {
       </div>
       <aside className="cart-summary">
         <h2>Votre récapitulatif</h2>
+        {mode === "demo" && <CartShippingPreview lines={lines} />}
         <dl>
           <div>
             <dt>Sous-total indicatif</dt>
-            <dd>{money(cartTotal(lines))}</dd>
+            <dd>{money(cartTotal(lines, products))}</dd>
           </div>
           <div>
             <dt>Livraison physique</dt>
@@ -91,9 +101,18 @@ export function CartView() {
           Ce panier est conservé sur cet appareil. Les prix et stocks seront
           revérifiés côté serveur lors du futur parcours de commande.
         </p>
-        <button className="button" disabled>
-          Commandes bientôt disponibles
-        </button>
+        {mode === "live" && (
+          <Link className="button button-secondary" href="/commander">
+            {orderingEnabled
+              ? "Préparer ma commande →"
+              : "Vérifier mon panier côté serveur →"}
+          </Link>
+        )}
+        {!orderingEnabled && (
+          <button className="button" disabled>
+            Commandes bientôt disponibles
+          </button>
+        )}
         <small>Pas de paiement, pas de réservation de stock.</small>
         <Link className="text-link" href="/boutique">
           Continuer mes découvertes →

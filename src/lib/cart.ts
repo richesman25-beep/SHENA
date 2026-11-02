@@ -1,6 +1,9 @@
-import { products } from "./catalog";
+import { products, type Product } from "./catalog";
 export type CartLine = { id: string; quantity: number };
-export function normalizeCart(raw: unknown): CartLine[] {
+export function normalizeCart(
+  raw: unknown,
+  source: Product[] = products,
+): CartLine[] {
   if (!Array.isArray(raw)) return [];
   const result: CartLine[] = [];
   for (const line of raw) {
@@ -12,8 +15,13 @@ export function normalizeCart(raw: unknown): CartLine[] {
       line.quantity < 1
     )
       continue;
-    const product = products.find((p) => p.id === line.id);
-    if (!product || result.some((l) => l.id === line.id)) continue;
+    const product = source.find((p) => p.id === line.id);
+    if (
+      !product ||
+      product.type === "unknown" ||
+      result.some((l) => l.id === line.id)
+    )
+      continue;
     const limit =
       product.type === "digital"
         ? 1
@@ -25,10 +33,10 @@ export function normalizeCart(raw: unknown): CartLine[] {
   }
   return result;
 }
-export function cartTotal(lines: CartLine[]) {
-  return normalizeCart(lines).reduce(
+export function cartTotal(lines: CartLine[], source: Product[] = products) {
+  return normalizeCart(lines, source).reduce(
     (sum, line) =>
-      sum + products.find((p) => p.id === line.id)!.price * line.quantity,
+      sum + source.find((p) => p.id === line.id)!.price * line.quantity,
     0,
   );
 }
