@@ -18,7 +18,7 @@ Les valeurs NULL du relevé de défauts sont interprétées comme l'absence de D
 
 Seule contrainte rapportée : `"SHENA_pkey" PRIMARY KEY (id)`, validée. Aucun CHECK, UNIQUE additionnel ou FK. RLS active, FORCE RLS false. Politique `"Public can view active product"`, PERMISSIVE, SELECT pour anon et authenticated, USING `(active = true)`, WITH CHECK absent.
 
-Le DDL complet préparé est `docs/proposals/staging/00-products-bootstrap-review.sql`. Il reproduit ces dix colonnes, défauts, nullabilité, clé et politique. La casse du nom SHENA_pkey est conservée par des guillemets. Il ne crée ni compte, ni extension supposée, ni fonction privilégiée, ni contrainte admin. La seule ligne insérée est un produit fictif inactif ; ses id/date utilisent les défauts confirmés.
+Le DDL complet préparé est `docs/proposals/staging/00-products-bootstrap-review.sql`. Il reproduit ces neuf colonnes, défauts, nullabilité, clé et politique. La casse du nom SHENA_pkey est conservée par des guillemets. Il ne crée ni compte, ni extension supposée, ni fonction privilégiée, ni contrainte admin. La seule ligne insérée est un produit fictif inactif ; ses id/date utilisent les défauts confirmés.
 
 RLS est activée avant les grants clients, dans la même transaction que la création. Les grants Supabase par défaut sont révoqués pour la nouvelle table avant SELECT. **Écart intentionnel à Production : les grants dangereux ne sont pas reproduits**, même s'ils font partie du relevé source. Le propriétaire/les index autonomes/triggers/règles et les permissions de schéma ne sont pas attestés par les informations reçues ; ne pas annoncer une copie exhaustive de tous les objets ou un test de restauration.
 

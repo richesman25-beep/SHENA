@@ -51,7 +51,7 @@ L'application existante insère explicitement id et created_at ; elle met à jou
 ## Privilèges et politiques
 
 - L'original ajoute des droits sans retirer les éventuels anciens DELETE, TRUNCATE, TRIGGER ou droits de colonne. RLS ne protège pas TRUNCATE. Ne pas confondre absence de route REST TRUNCATE avec absence du privilège SQL.
-- La proposition retire les droits directs de table et de colonne de anon/authenticated, puis accorde SELECT sur les dix colonnes, INSERT sur ces colonnes à authenticated et UPDATE seulement sur les sept champs éditables. Aucun DELETE, TRUNCATE, REFERENCES, TRIGGER ou droit transmissible n'est ajouté.
+- La proposition retire les droits directs de table et de colonne de anon/authenticated, puis accorde SELECT sur les neuf colonnes, INSERT sur ces colonnes à authenticated et UPDATE seulement sur les sept champs éditables. Aucun DELETE, TRUNCATE, REFERENCES, TRIGGER ou droit transmissible n'est ajouté.
 - REVOKE sur un rôle ne retire pas les droits hérités ou PUBLIC. La proposition refuse toute appartenance sortante de ces rôles et toute écriture PUBLIC sur la table/colonnes. La lecture publique existante reste conservée.
 - authenticated représente aussi les clients ordinaires : les grants INSERT/UPDATE sont donc nécessaires mais insuffisants. Les politiques permissives admin et les gardes restrictives exigent toutes le helper de rôle. Une nouvelle politique permissive ne suffira pas, par OR, à ouvrir les écritures à un client tant que ces gardes restent présentes.
 - L'UPDATE vérifie les lignes avant et après modification. Dépublier est simplement UPDATE active=false, soumis aux mêmes contrôles. Les administrateurs partagent le catalogue ; aucune isolation entre les deux fondateurs n'est souhaitée ici.

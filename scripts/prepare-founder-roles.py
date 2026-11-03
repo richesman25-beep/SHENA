@@ -41,7 +41,7 @@ def main() -> None:
     if a.output.resolve().is_relative_to(Path(__file__).resolve().parents[1]):p.error("Fichier nominatif hors du dépôt Git requis")
     try: content=prepare(a.admin_a_email,a.admin_b_email)
     except ValueError as e: p.error(str(e))
-    with a.output.open("x",opener=lambda path,flags: __import__('os').open(path,flags,0o600)) as f: f.write(content)
+    with open(a.output,"x",opener=lambda path,flags: __import__('os').open(path,flags,0o600)) as f: f.write(content)
     print("Fichier nominatif privé créé pour revue ; aucune requête exécutée ni invitation envoyée.")
 
 if __name__ == '__main__': main()

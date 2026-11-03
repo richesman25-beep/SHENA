@@ -41,7 +41,7 @@ def main():
  if a.output.resolve().is_relative_to(Path(__file__).resolve().parents[1]):p.error('Fichier marchand hors du dépôt Git requis')
  try:s=prepare(a.reservation_minutes,json.loads(a.accounts_json.read_text()) if a.accounts_json else [],a.manual_payments,a.digital_delivery)
  except (ValueError,OSError) as e:p.error(str(e))
- with a.output.open('x',opener=lambda path,flags:os.open(path,flags,0o600)) as f:f.write(s)
+ with open(a.output,'x',opener=lambda path,flags:os.open(path,flags,0o600)) as f:f.write(s)
  print('Script nominatif/marchand écrit pour revue. Aucun SQL, tâche cron ou paiement exécuté.')
 
 if __name__=='__main__':main()

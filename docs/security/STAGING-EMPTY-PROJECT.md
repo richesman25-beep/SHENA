@@ -2,7 +2,7 @@
 
 Les métadonnées de Production ont été confirmées par le propriétaire. Le schéma public de STAGING est déclaré vide ; aucune connexion n'a été effectuée pour le vérifier. Aucune requête SQL distante n'est exécutée par cette préparation.
 
-Le fichier `docs/proposals/staging/00-products-bootstrap-review.sql` contient désormais le DDL des **dix** colonnes rapportées, leurs types, défauts, nullabilité, la clé primaire `"SHENA_pkey"` et la politique SELECT exacte. RLS est activée avant les grants. Seul SELECT est accordé aux clients ; les ACL dangereuses de Production ne sont pas copiées. Un produit fictif inactif est prévu, sans compte ni donnée personnelle. La transaction se termine par ROLLBACK : elle ne laisse aucune table persistante.
+Le fichier `docs/proposals/staging/00-products-bootstrap-review.sql` contient désormais le DDL des **neuf** colonnes rapportées, leurs types, défauts, nullabilité, la clé primaire `"SHENA_pkey"` et la politique SELECT exacte. RLS est activée avant les grants. Seul SELECT est accordé aux clients ; les ACL dangereuses de Production ne sont pas copiées. Un produit fictif inactif est prévu, sans compte ni donnée personnelle. La transaction se termine par ROLLBACK : elle ne laisse aucune table persistante.
 
 Le relevé détaillé et les limites sont dans [PRODUCTS-CONFIRMED-SCHEMA.md](PRODUCTS-CONFIRMED-SCHEMA.md). Le propriétaire source, les éventuels index autonomes, triggers, règles, droits de schéma et fonctions installées restent à vérifier. Aucun changement de rôle système n'est proposé.
 

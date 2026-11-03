@@ -1,0 +1,4 @@
+{
+  "site_url": "https://shena-2go5.vercel.app",
+  "uri_allow_list": "https://shena-2go5.vercel.app/admin/auth/callback,https://shena-2go5.vercel.app/admin/auth/confirm"
+}

@@ -2,7 +2,11 @@
 
 La PR #3 a été fusionnée par le propriétaire. Cette préparation lui succède, sans nouvelle fusion automatique. Aucun SQL, compte, paiement ni fichier Production n'a été modifié par cette phase.
 
-Constats directs : catalogue public accessible (un produit actif avec image au contrôle), Vercel Production en mode live et checkout disabled. La lecture publique ne permet pas d'attester les ACL, les politiques Storage, Auth ou les sauvegardes. Aucun accès opérateur Supabase n'est disponible ici ; aucune sauvegarde/restauration n'est certifiée.
+Constats opérateur du 3 novembre 2026 : accès Management API confirmé, projet ACTIVE_HEALTHY, PostgreSQL 17.11. Neuf colonnes products conformes au relevé, une seule politique SELECT active=true, un produit compatible avec les contrôles de données proposés. anon/authenticated ont effectivement TRUNCATE et les sept autres grants directs ; aucune ACL de colonne ni appartenance sortante. Aucun rôle système n'a été modifié. Rapport détaillé privé hors Git.
+
+Deux comptes Auth existants, emails vérifiés et connexions antérieures, aucun administrateur actuel. Le script nominatif est préparé hors Git sans attribuer de rôle. La vérification des emails ne prouve pas à elle seule l'identité civile ; aucun mot de passe ni session de fondateur n'a été utilisé.
+
+Storage : product-images public, limite 8 Mio, MIME non restreints, un objet. ACL natives clients CRUD seulement, sans TRUNCATE : **02-storage-acl n'est pas nécessaire dans l'état inventorié**. Pas d'ajout WebP nécessaire avec cette liste MIME nulle. La fonction événementielle rls_auto_enable (postgres, search_path pg_catalog) est examinée et exemptée du contrôle definer uniquement si signature, propriétaire, configuration et empreinte du corps correspondent exactement ; tout autre definer accessible reste bloquant.
 
 ## Scripts exacts à examiner
 
@@ -13,7 +17,7 @@ Les anciennes propositions finissant par ROLLBACK sont conservées. Les fichiers
 | 00    | [Privilèges products](proposals/production-activation/persistent/00-products-acl.sql)     | Retire les sept grants dangereux, dont TRUNCATE ; conserve SELECT et RLS. Arrêt si l'inventaire diffère. Ne pas réappliquer après admin.                                                                                                                                                            |
 | 01    | [Administration](proposals/production-activation/persistent/01-admin.sql)                 | Rôle serveur, droits de colonnes et RLS admin ; valide prix/stock/type. Les anciennes lignes invalides font arrêter la migration, sans correction automatique.                                                                                                                                      |
 | 02    | [Commandes et revue manuelle](proposals/production-activation/persistent/02-commerce.sql) | Nouvelles tables et RPC ; montants recalculés, stock réservé, idempotence, double contrôle et journal immuable. Tout reste désactivé. Aucun compte marchand inventé.                                                                                                                                |
-| 02b   | [ACL natives Storage](proposals/production-activation/persistent/02-storage-acl.sql)      | Retire TRUNCATE, TRIGGER, REFERENCES et MAINTAIN des rôles clients sur buckets/objects, sans changer leurs droits CRUD ni les rôles système. Arrêt si grantors ou droits effectifs diffèrent.                                                                                                       |
+| 02b   | [ACL natives Storage](proposals/production-activation/persistent/02-storage-acl.sql)      | Optionnel, non nécessaire selon cet audit : retire TRUNCATE, TRIGGER, REFERENCES et MAINTAIN des rôles clients sur buckets/objects, sans changer leurs droits CRUD ni les rôles système. Arrêt si grantors ou droits effectifs diffèrent.                                                           |
 | 03    | [Storage privé](proposals/production-activation/persistent/03-storage.sql)                | Conserve les images JPEG, la visibilité et la taille de product-images ; ajoute WebP sans retirer les MIME existants. Crée deux buckets privés et ajoute des gardes restrictives sur les buckets concernés. Peut bloquer un ancien upload non administrateur : inventorier les usages avant accord. |
 | 04    | [Livraison numérique](proposals/production-activation/persistent/04-digital-delivery.sql) | Versions contrôlées, double approbation et autorisation client fondée sur son paiement vérifié. Aucun téléchargement activé.                                                                                                                                                                        |
 
@@ -29,7 +33,15 @@ Les helpers SECURITY DEFINER ont un propriétaire explicite, des références qu
 4. Restaurer hors Production, isoler les intégrations, emails, tâches planifiées et paiements. Vérifier les tables, permissions/RLS et les octets de chaque fichier restauré. Ne jamais exposer publiquement la copie des données privées.
 5. `scripts/check-backup-artifacts.py` contrôle l'intégrité des archives et des copies Storage restaurées. Il **ne certifie pas** la restauration PostgreSQL ni le service Storage ; les essais de services et preuves doivent être examinés séparément. SHA256 prouve l'intégrité, pas la confidentialité.
 
-Aucun jeton Supabase opérateur n'est trouvé dans les accès actuels ; le champ SUPABASE_ACCESS_TOKEN est préparé dans le brouillon sécurisé, sans réinitialiser Vercel. Renseigner ce nouvel accès puis enregistrer/publier l'environnement est indispensable pour l'audit réel. Un accès SQL/Auth/Storage équivalent convient ; aucune clé secrète dans le navigateur.
+L'accès opérateur est maintenant fonctionnel : aucune nouvelle configuration de ce jeton n'est demandée. L'API ne présente aucune sauvegarde disponible (PITR désactivé). Aucun identifiant PostgreSQL pour pg_dump n'est disponible. Ne pas confondre le rapport de métadonnées avec une sauvegarde complète.
+
+La copie chiffrée AES-256-GCM du bucket et de son objet, avec métadonnées et SHA256, a été réalisée hors Git le 2026-11-03. L'inventaire était inchangé avant/après ; déchiffrement et restauration des octets dans un répertoire isolé réussis. Cela ne valide ni une restauration du service Storage, ni PostgreSQL, ni une copie externe durable. Les archives locales éphémères ne satisfont donc pas le prérequis d'installation.
+
+Option technique nécessitant accord : POST `https://api.supabase.com/v1/projects/xxadpoebcslutlevzdsy/cli/login-role`, corps exact [backup-login-role.request.json](proposals/production-activation/backup-login-role.request.json). Cette API crée un rôle temporaire : elle n'a pas été appelée. Après accord, examiner les droits et la durée retournés avant pg_dump ; un accès read_only ne garantit pas la couverture Auth/RLS/objets système. Ne pas réinitialiser le mot de passe postgres. La destination durable privée pour l'archive et la clé séparée doit être autorisée avant transfert.
+
+Auth est encore configuré avec site_url localhost et aucune redirection autorisée. Proposition exacte non appliquée : PATCH `https://api.supabase.com/v1/projects/xxadpoebcslutlevzdsy/config/auth`, corps [auth-production.patch.json](proposals/production-activation/auth-production.patch.json). Cela configure uniquement l'origine publique actuelle et les deux callbacks existants ; ni SMTP, ni confirmation, ni comptes ne sont modifiés. Pas de wildcard Preview. Accord nécessaire avant ce changement Production.
+
+pg_cron est disponible (1.6.4) et préchargé mais non installé. [07-pg-cron-review.sql](proposals/production-activation/07-pg-cron-review.sql) prépare son installation avec permissions clients retirées, sans tâche ni activation. Cette proposition garde ROLLBACK ; une installation persistante distincte devra être approuvée. Sans planification validée, ne pas activer les réservations.
 
 ## Fondateurs et activation séparée
 
@@ -43,10 +55,12 @@ Aucun jeton Supabase opérateur n'est trouvé dans les accès actuels ; le champ
 
 ## Validation et retour arrière
 
-Les tests utilisent des comptes/objets/paiements **synthétiques dans PostgreSQL local en mémoire**, sans appel monétaire ou écriture distante. Ils ne prouvent pas la configuration Supabase actuelle. Le correctif ACL final est analysé statiquement, sans tentative TRUNCATE Production.
+Les tests utilisent des comptes/objets/paiements **synthétiques dans PostgreSQL local en mémoire**, sans appel monétaire ou écriture distante. Ils ne prouvent pas la configuration Supabase actuelle. Le correctif ACL exact est aussi exécuté dans PostgreSQL embarqué local (version 18), sur une reproduction synthétique : SELECT reste autorisé, les sept autres privilèges effectifs sont refusés, et TRUNCATE/INSERT/UPDATE/DELETE échouent sans modifier les lignes. Cela ne remplace pas une restauration complète ni un essai Supabase natif PostgreSQL 17 ; aucune tentative TRUNCATE Production.
 
 Les migrations sont transactionnelles par fichier, avec lock_timeout court et arrêt sur schéma inattendu. Une erreur avant COMMIT doit annuler ce fichier. Si 00 réussit puis 01 échoue, la lecture reste disponible et les grants dangereux restent retirés. Ne jamais restaurer aveuglément TRUNCATE ni désactiver RLS pour débloquer une erreur.
 
 Après installation persistante, arrêter d'abord les nouveaux flux avec les drapeaux applicatifs/DB, conserver les données et le journal, puis préparer une réparation ciblée approuvée. Un retour arrière du code ne restaure pas le schéma. Aucune suppression de table/bucket ni restauration par écrasement de Production n'est proposée comme retour arrière automatique.
 
 Contrôles locaux de cette préparation : TypeScript, lint, formatage et build réussis ; 86 tests TypeScript/PostgreSQL locaux réussis, 1 test ACL volontairement non exécuté ; 19 contrôles SQL/outils ; 13 parcours publics démo, 3 sans configuration et 20 admin/commandes sur fixture isolée réussis. Aucun de ces résultats ne certifie les sauvegardes, RLS ou paiements de Production.
+
+Vérifications supplémentaires du 3 novembre : 88 tests TypeScript/PostgreSQL locaux réussis, 20 contrôles Python réussis ; typecheck, lint et format réussis. La copie chiffrée Storage et la preuve locale sont hors Git sous /tmp/shena-storage-backup-20261103 ; clé séparée privée. Aucune migration appliquée, aucun rôle attribué, aucun réglage Auth ni Vercel modifié.

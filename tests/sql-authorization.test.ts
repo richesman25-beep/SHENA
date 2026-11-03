@@ -45,13 +45,6 @@ test("Modèle PostgreSQL local: authentification admin et métadonnées, hors co
       },
     );
     await t.test(
-      "Correctif ACL final : aucune exécution distante sans sauvegarde et approbation",
-      {
-        skip: "Aucun essai local du correctif final, notamment MAINTAIN ; les modèles métier sont distincts.",
-      },
-      async () => {},
-    );
-    await t.test(
       "migration admin corrigée: client non promu, deux admins autorisés, prix/stock invalides refusés",
       async () => {
         await db.exec(

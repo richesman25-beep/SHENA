@@ -36,7 +36,7 @@ def main():
    auth['custom_smtp_configured']=bool(config.get('smtp_host'))
   except urllib.error.HTTPError as e:auth={'unavailable_http_status':e.code}
   report={'project_ref':REF,'project_status':project.get('status'),'inventory':inventory,'auth_config_non_secret':auth,'provider_backups':backups,'storage_object_bytes_backed_up':False,'database_restore_verified':False,'storage_restore_verified':False}
-  with out.open('x',opener=lambda path,flags:os.open(path,flags,0o600)) as f:json.dump(report,f,indent=2)
+  with open(out,'x',opener=lambda path,flags:os.open(path,flags,0o600)) as f:json.dump(report,f,indent=2)
   print(json.dumps({'project_ref':REF,'metadata_report_saved':True,'restoration_verified':False,'note':'Les sauvegardes DB Supabase ne sauvegardent pas les octets Storage ; inventaire privé hors Git.'}))
  except urllib.error.HTTPError as e:raise SystemExit('Accès opérateur refusé/indisponible : HTTP '+str(e.code)) from None
  except urllib.error.URLError:raise SystemExit('Réseau opérateur indisponible ; aucun état de sauvegarde certifié') from None

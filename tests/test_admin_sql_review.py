@@ -15,6 +15,7 @@ class SqlReviewTests(unittest.TestCase):
     def test_postgres_syntax(self):
         for relative in (
             "docs/proposals/staging/04-storage-capabilities-review.sql",
+            "docs/proposals/production-activation/07-pg-cron-review.sql",
             "docs/proposals/tests/products-acl-unsafe-stage-simulation-review.sql",
             "docs/proposals/staging/02-storage-review.sql",
             "docs/proposals/staging/03-commerce-review.sql",
@@ -57,6 +58,30 @@ class SqlReviewTests(unittest.TestCase):
         inventory=(ROOT / "docs/proposals/production-activation/00-inventory-readonly.sql").read_text()
         for item in parse_sql(inventory):
             self.assertIn(type(item.stmt).__name__, ("SelectStmt", "TransactionStmt", "VariableSetStmt"))
+
+    def test_private_tools_write_exclusive_mode_600_files(self):
+        import tempfile,sys,os,io,contextlib
+        from unittest.mock import patch
+        cases=[
+            ("prepare-founder-roles.py",["--admin-a-email","a@example.test","--admin-b-email","b@example.test"]),
+            ("prepare-commerce-enablement.py",["--reservation-minutes","30"]),
+            ("audit-production-access.py",[]),
+        ]
+        for filename,args in cases:
+            with self.subTest(tool=filename),tempfile.TemporaryDirectory() as directory:
+                spec=importlib.util.spec_from_file_location("private_tool",ROOT/"scripts"/filename)
+                module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+                output=Path(directory)/"private-output"
+                def response(request,timeout=None):
+                    data={"id":"xxadpoebcslutlevzdsy","status":"SYNTHETIC ONLY"} if request.full_url.endswith("/xxadpoebcslutlevzdsy") else {}
+                    return io.BytesIO(json.dumps(data).encode())
+                with patch.object(sys,"argv",[filename,*args,"--output",str(output)]),patch.dict(os.environ,{"SUPABASE_ACCESS_TOKEN":"SYNTHETIC-NOT-A-KEY"}),patch("urllib.request.urlopen",side_effect=response),contextlib.redirect_stdout(io.StringIO()):
+                    module.main()
+                    self.assertGreater(output.stat().st_size,0)
+                    self.assertEqual(output.stat().st_mode & 0o777,0o600)
+                    original=output.read_bytes()
+                    with self.assertRaises(FileExistsError):module.main()
+                    self.assertEqual(output.read_bytes(),original)
 
     def test_founder_generator_rejects_duplicates_and_keeps_metadata_authority(self):
         spec=importlib.util.spec_from_file_location("founders", ROOT / "scripts/prepare-founder-roles.py")

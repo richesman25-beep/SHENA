@@ -14,7 +14,7 @@ Ces fonctions sont testées localement et **ne sont pas installées sur Supabase
 
 ## Sécurité prioritaire products
 
-Le bootstrap fidèle reprend les dix colonnes confirmées, PK et politique SELECT, avec RLS avant accès client. Il conserve la nullabilité historique ; la migration admin ajoute ensuite ses propres contraintes, qui peuvent refuser les anciennes données invalides sans les modifier.
+Le bootstrap fidèle reprend les neuf colonnes confirmées, PK et politique SELECT, avec RLS avant accès client. Il conserve la nullabilité historique ; la migration admin ajoute ensuite ses propres contraintes, qui peuvent refuser les anciennes données invalides sans les modifier.
 
 Le correctif minimal retire INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER et MAINTAIN à anon/authenticated. Il conserve SELECT et la politique publique. Les tests pré-admin et post-admin sont distincts : après migration admin, authenticated reçoit les droits de colonnes nécessaires, tandis que RLS refuse les clients ordinaires. TRUNCATE et DELETE restent interdits aux comptes applicatifs.
 

@@ -1,5 +1,5 @@
 -- INSTALLATION PERSISTANTE PROPOSÉE : 01-admin. NON EXÉCUTÉE.
--- Source préservée : docs/proposals/production-01-admin-production-candidate.sql ; SHA256 f5644c61e98eaa17d471285234fabc0db82b3593e03c8a1dddfeaab9f2f5b3fb
+-- Source préservée : docs/proposals/production-01-admin-production-candidate.sql ; SHA256 73b5750aaf0060915f53dfb64755e1d0a31b54f0d91960e2ed3c05c84b0788bb
 -- Ne pas exécuter sans revue du fichier exact et approbation explicite.
 -- Les paramètres sont des attestations opérateur, pas une preuve de restauration.
 -- Aucun script applicatif/build n'exécute ce fichier.
@@ -57,7 +57,7 @@ BEGIN
   END IF;
   SELECT array_agg(attname::text ORDER BY attname) INTO actual
     FROM pg_catalog.pg_attribute WHERE attrelid=t AND attnum>0 AND NOT attisdropped;
-  IF actual IS DISTINCT FROM expected THEN RAISE EXCEPTION 'Colonnes différentes du contrat à dix colonnes : arrêt'; END IF;
+  IF actual IS DISTINCT FROM expected THEN RAISE EXCEPTION 'Colonnes différentes du contrat à neuf colonnes : arrêt'; END IF;
   FOR r IN SELECT attname,atttypid,atttypmod,attidentity,attgenerated
       FROM pg_catalog.pg_attribute WHERE attrelid=t AND attnum>0 AND NOT attisdropped LOOP
     IF r.attidentity<>'' OR r.attgenerated<>'' THEN RAISE EXCEPTION 'Colonne générée/identity non examinée : %',r.attname; END IF;
@@ -96,7 +96,14 @@ BEGIN
   END IF;
   IF EXISTS(SELECT 1 FROM pg_catalog.pg_proc p WHERE p.pronamespace='public'::regnamespace
       AND p.prosecdef AND p.prokind IN('f','p') AND
-      (pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE') OR pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE'))) THEN
+      (pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE') OR pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE'))
+      -- Fonction événementielle auditée le 2026-11-03 : non appelable comme RPC.
+      -- Tout changement de corps/propriétaire/configuration exige un nouvel examen.
+      AND NOT COALESCE((p.oid=pg_catalog.to_regprocedure('public.rls_auto_enable()')
+        AND p.prorettype='pg_catalog.event_trigger'::regtype AND p.pronargs=0
+        AND p.proowner='postgres'::regrole AND p.prolang=(SELECT oid FROM pg_catalog.pg_language WHERE lanname='plpgsql')
+        AND p.proconfig=ARRAY['search_path=pg_catalog']::text[]
+        AND pg_catalog.md5(p.prosrc)='c44fb229ea8a6b0afd04a0a33261c16c'),false)) THEN
     RAISE EXCEPTION 'RPC SECURITY DEFINER publique déjà accessible : audit séparé requis';
   END IF;
   FOR r IN SELECT oid,rolname,rolsuper,rolbypassrls,rolcreaterole,rolcreatedb,rolreplication,rolcanlogin
