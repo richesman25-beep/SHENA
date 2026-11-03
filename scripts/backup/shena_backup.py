@@ -253,6 +253,16 @@ def execute(a):
                 configure_github(config,token)
                 return
             store=DriveStore(binary,config);vault=LocalVault()
+            if a.restore_latest:
+                with tempfile.TemporaryDirectory(prefix='receipt-',dir=root) as folder:
+                    receipt=store.latest_report(vault,private_directory(folder))
+                report=root/(uuid.uuid4().hex+'-receipt.json')
+                try:restore_receipt(a,store,vault,root,receipt)
+                finally:
+                    report.write_text(json.dumps(receipt,indent=2)+'\n')
+                    store.save_report(receipt,vault)
+                print('Copie Drive restaurée ; reçu privé : '+str(report))
+                return
             if a.restore_receipt:
                 receipt=json.loads(a.restore_receipt.read_text())
                 try:restore_receipt(a,store,vault,root,receipt)
@@ -315,8 +325,14 @@ def run_backup(a,root,store,vault,token,project):
         restore_receipt(a,store,vault,root,receipt)
         receipt['durable_copy_readback_verified']=True
     finally:
-        receipt_file.write_text(json.dumps(receipt,indent=2)+'\n')
-        print('Rapport privé : '+str(receipt_file))
+        # Un échec de pg_restore doit aussi laisser une preuve récupérable dans
+        # Drive, chiffrée, puisque le runner ne publie aucun artefact GitHub.
+        try:
+            if receipt.get('drive_file_id'):
+                receipt['encrypted_report_path']=store.save_report(receipt,vault)
+        finally:
+            receipt_file.write_text(json.dumps(receipt,indent=2)+'\n')
+            print('Rapport privé : '+str(receipt_file))
     print('Base et octets restaurés ; aucune migration automatique. Rapport à examiner.')
 
 
@@ -326,6 +342,7 @@ def main():
     parser.add_argument('--configure-github',action='store_true')
     parser.add_argument('--test-connections',action='store_true')
     parser.add_argument('--restore-receipt',type=Path)
+    parser.add_argument('--restore-latest',action='store_true')
     parser.add_argument('--restore-image',help='Image Supabase PostgreSQL compatible ; empreinte résolue et enregistrée')
     default=Path(os.environ.get('LOCALAPPDATA',Path.home()/'.local/state'))/'SHENA/backups'
     parser.add_argument('--output',type=Path,default=default)

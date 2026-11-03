@@ -131,6 +131,47 @@ class BackupTests(unittest.TestCase):
             data=bytearray(downloaded.read_bytes());data[-17]^=1;downloaded.write_bytes(data)
             with self.assertRaises(Exception):core.decrypt_file(downloaded,d/'invalid',vault,vault.key_id,'a'*32)
 
+    @unittest.skipUnless(os.environ.get('SHENA_BACKUP_RCLONE_TESTS')=='1','rclone réel activé en CI')
+    def test_encrypted_reports_recovered_from_remote_without_github_artifact(self):
+        with tempfile.TemporaryDirectory() as folder:
+            d=Path(folder);remote=d/'remote';remote.mkdir();binary=drive.ensure_rclone(d/'tools')
+            class Store(drive.DriveStore):
+                def __init__(self):self.config=d/'private.conf';self.transport=drive.RcloneTransfer(binary,str(remote))
+                def upload(self,key,source):self.transport.upload(key,source);return {'object_key':key}
+                def locate(self,key):return {'object_key':key}
+                def download(self,receipt,target):self.transport.download(receipt['object_key'],target)
+            with patch.dict(os.environ,{'SHENA_BACKUP_MASTER_KEY':__import__('base64').b64encode(b'x'*32).decode()}):vault=drive.LocalVault()
+            store=Store();receipt={'project_ref':core.REF,'backup_id':'a'*32,'provider':'google-drive','database_restore_verified':False,'marker':'SYNTHETIC PRIVATE REPORT ONLY'}
+            path=store.save_report(receipt,vault)
+            self.assertNotIn(b'SYNTHETIC PRIVATE REPORT ONLY',(remote/path).read_bytes())
+            restored=store.latest_report(vault,d)
+            self.assertEqual(restored,receipt)
+            self.assertFalse(restored['database_restore_verified'])
+
+    def test_installer_checksums_and_official_release_fallback(self):
+        from urllib.error import HTTPError
+        import zipfile
+        payload=io.BytesIO()
+        binary_name='rclone.exe' if os.name=='nt' else 'rclone'
+        with zipfile.ZipFile(payload,'w') as z:z.writestr('rclone-v1.2.3-platform/'+binary_name,b'SYNTHETIC EXECUTABLE ONLY')
+        data=payload.getvalue();filename='rclone-v1.2.3-windows-amd64.zip' if os.name=='nt' else 'rclone-v1.2.3-linux-amd64.zip'
+        checks=__import__('hashlib').sha256(data).hexdigest()+'  '+filename
+        prefix='https://github.com/rclone/rclone/releases/download/v1.2.3/'
+        release={'tag_name':'v1.2.3','assets':[{'name':n,'browser_download_url':prefix+n} for n in ('SHA256SUMS',filename)]}
+        def read(req,timeout=None):
+            url=req.full_url
+            self.assertEqual(req.get_header('User-agent'),'SHENA-backup/1.0')
+            if 'downloads.rclone.org' in url:raise HTTPError(url,503,'Unavailable',{},None)
+            if url.endswith('/latest'):return io.BytesIO(json.dumps(release).encode())
+            if url.endswith('/SHA256SUMS'):return io.BytesIO(checks.encode())
+            return io.BytesIO(data)
+        with tempfile.TemporaryDirectory() as folder,patch.object(drive.shutil,'which',return_value=None),patch.object(drive.platform,'machine',return_value='AMD64'),patch.object(drive.platform,'system',return_value='Windows' if os.name=='nt' else 'Linux'),patch.object(drive.urllib.request,'urlopen',side_effect=read):
+            binary=Path(drive.ensure_rclone(Path(folder)/'verified'))
+            self.assertEqual(binary.read_bytes(),b'SYNTHETIC EXECUTABLE ONLY')
+            checks='0'*64+'  '+filename
+            with self.assertRaises(RuntimeError):drive.ensure_rclone(Path(folder)/'invalid')
+            self.assertFalse((Path(folder)/'invalid'/binary_name).exists())
+
     def test_no_production_migration_or_automatic_attestation(self):
         source=(ROOT/'scripts/backup/shena_backup.py').read_text()
         self.assertNotIn('backup_restore_verified',source)

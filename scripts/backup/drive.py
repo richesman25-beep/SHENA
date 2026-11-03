@@ -86,18 +86,31 @@ def ensure_rclone(directory):
     binary=directory/('rclone.exe' if os.name=='nt' else 'rclone')
     if binary.exists():return str(binary)
     def read(url):
-        with urllib.request.urlopen(url,timeout=90) as stream:return stream.read()
-    version=read('https://downloads.rclone.org/version.txt').decode().strip()
-    if not re.fullmatch(r'rclone v\d+\.\d+\.\d+',version):raise RuntimeError('Version rclone officielle non reconnue')
-    version=version.split()[1]
+        req=urllib.request.Request(url,headers={'User-Agent':'SHENA-backup/1.0'})
+        with urllib.request.urlopen(req,timeout=90) as stream:return stream.read()
     system={'Windows':'windows','Linux':'linux','Darwin':'osx'}.get(platform.system())
     arch={'ARM64':'arm64','AMD64':'amd64','x86_64':'amd64','arm64':'arm64','aarch64':'arm64'}.get(platform.machine())
     if not system or not arch:raise RuntimeError('Installer rclone officiel pour cette plateforme')
-    filename=f'rclone-{version}-{system}-{arch}.zip'
-    base='https://downloads.rclone.org/'+version+'/'
-    checks=read(base+'SHA256SUMS').decode()
-    expected=next((line.split()[0] for line in checks.splitlines() if line.split()[-1].lstrip('*')==filename),None)
-    data=read(base+filename)
+    try:
+        version=read('https://downloads.rclone.org/version.txt').decode().strip()
+        if not re.fullmatch(r'rclone v\d+\.\d+\.\d+',version):raise RuntimeError('Version rclone officielle non reconnue')
+        version=version.split()[1];filename=f'rclone-{version}-{system}-{arch}.zip'
+        base='https://downloads.rclone.org/'+version+'/'
+        checks=read(base+'SHA256SUMS').decode();data=read(base+filename)
+    except urllib.error.HTTPError as e:
+        if e.code not in (403,404,429,500,502,503):raise
+        # Autre distribution officielle du MÊME projet, jamais un miroir tiers.
+        release=json.loads(read('https://api.github.com/repos/rclone/rclone/releases/latest'))
+        version=release['tag_name']
+        if not re.fullmatch(r'v\d+\.\d+\.\d+',version) or release.get('prerelease') or release.get('draft'):
+            raise RuntimeError('Version stable rclone requise')
+        filename=f'rclone-{version}-{system}-{arch}.zip'
+        assets={asset['name']:asset['browser_download_url'] for asset in release['assets']}
+        prefix='https://github.com/rclone/rclone/releases/download/'+version+'/'
+        for name in ('SHA256SUMS',filename):
+            if not assets.get(name,'').startswith(prefix):raise RuntimeError('Distribution GitHub rclone non reconnue')
+        checks=read(assets['SHA256SUMS']).decode();data=read(assets[filename])
+    expected=next((line.split()[0] for line in checks.splitlines() if line.split() and line.split()[-1].lstrip('*').removeprefix('./')==filename),None)
     if not expected or hashlib.sha256(data).hexdigest()!=expected:raise RuntimeError('Téléchargement rclone non vérifié')
     import io
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
@@ -126,7 +139,7 @@ class RcloneTransfer:
         return result.stdout
 
     def path(self,key):
-        if not re.fullmatch(r'[a-f0-9]{32}/backup\.shena',key):raise ValueError('Chemin sauvegarde inattendu')
+        if not re.fullmatch(r'[a-f0-9]{32}/(?:backup|receipt-[a-f0-9]{32})\.shena',key):raise ValueError('Chemin sauvegarde inattendu')
         return self.root+'/'+key if not self.root.endswith(':') else self.root+key
 
     def upload(self,key,source):
@@ -183,15 +196,46 @@ class DriveStore:
         if is_folder and meta.get('mimeType')!='application/vnd.google-apps.folder':raise RuntimeError('Dossier Google requis')
         return meta
 
-    def upload(self,key,source):
+    def locate(self,key):
         self.transport.call('about',REMOTE+':','--json')
         self.private(self.folder,is_folder=True)
-        meta=self.transport.upload(key,source)
+        meta=json.loads(self.transport.call('lsjson',self.transport.path(key),'--stat'))
         file=self.private(meta['ID'])
         if len(file.get('parents',[]))!=1:raise RuntimeError('Parent Drive ambigu')
         parent=self.private(file['parents'][0],is_folder=True)
-        if parent.get('parents')!=[self.folder]:raise RuntimeError('Dossier de sauvegarde hors racine privée')
+        if parent.get('parents')!=[self.folder]:raise RuntimeError('Dossier hors racine privée')
         return {'drive_file_id':meta['ID'],'drive_backup_folder_id':file['parents'][0],'drive_folder_id':self.folder,'object_key':key}
+
+    def upload(self,key,source):
+        self.transport.call('about',REMOTE+':','--json')
+        self.private(self.folder,is_folder=True)
+        self.transport.upload(key,source)
+        return self.locate(key)
+
+    def save_report(self,receipt,vault):
+        from core import encrypt_file
+        import uuid
+        name=receipt['backup_id']+'/receipt-'+uuid.uuid4().hex+'.shena'
+        with tempfile.TemporaryDirectory(prefix='report-',dir=self.config.parent) as folder:
+            root=private_directory(folder);plain=root/'receipt.json';encrypted=root/'receipt.shena'
+            plain.write_text(json.dumps(receipt,sort_keys=True))
+            key,wrapped=vault.new_data_key(receipt['backup_id'])
+            encrypt_file(plain,encrypted,key,wrapped,vault.key_id,receipt['backup_id'])
+            self.upload(name,encrypted)
+        return name
+
+    def latest_report(self,vault,root):
+        from core import decrypt_file
+        entries=json.loads(self.transport.call('lsjson',self.transport.root,'--recursive','--files-only'))
+        reports=[r for r in entries if re.fullmatch(r'[a-f0-9]{32}/receipt-[a-f0-9]{32}\.shena',r.get('Path',''))]
+        if not reports:raise RuntimeError('Aucun reçu chiffré dans ce dossier Drive')
+        key=max(reports,key=lambda r:r.get('ModTime',''))['Path'];meta=self.locate(key)
+        encrypted=Path(root)/'receipt.shena';self.download(meta,encrypted)
+        plain=Path(root)/'receipt.json'
+        decrypt_file(encrypted,plain,vault,vault.key_id,key.split('/')[0])
+        receipt=json.loads(plain.read_text())
+        if receipt.get('backup_id')!=key.split('/')[0] or receipt.get('project_ref')!=REF:raise RuntimeError('Reçu ne correspond pas au projet/chemin')
+        return receipt
 
     def download(self,receipt,target):
         self.transport.call('about',REMOTE+':','--json')
@@ -209,13 +253,20 @@ class DriveStore:
 def authorize(binary,config):
     if not sys.stdin.isatty():raise RuntimeError('Autorisation Google à faire sur votre ordinateur avec navigateur')
     LocalVault(create=True)
+    previous=None
+    if secret_get('rclone-count'):
+        old=configparser.ConfigParser(interpolation=None);old.read_string(load_config())
+        previous=old[REMOTE].get('root_folder_id')
     print('Autorisez rclone dans le navigateur Google. Aucun code OAuth à envoyer dans le chat.')
     result=subprocess.run([binary,'config','create',REMOTE,'drive','scope','drive.file','--config',str(config)],
                           stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=600)
     if result.returncode:raise RuntimeError('Autorisation Google non terminée ; aucun jeton affiché')
     # Créer un dossier personnel neuf ; aucun ancien dossier n'est partagé/modifié.
     temp=object.__new__(DriveStore);temp.config=Path(config);temp.binary=binary
-    folder=temp.api('files?fields=id',{'name':'SHENA encrypted backups','mimeType':'application/vnd.google-apps.folder'})['id']
+    if previous:
+        temp.private(previous,is_folder=True)
+        folder=previous
+    else:folder=temp.api('files?fields=id',{'name':'SHENA encrypted backups','mimeType':'application/vnd.google-apps.folder'})['id']
     result=subprocess.run([binary,'config','update',REMOTE,'root_folder_id',folder,'--config',str(config)],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     if result.returncode:raise RuntimeError('Configuration du dossier privé échouée')
     DriveStore(binary,config)

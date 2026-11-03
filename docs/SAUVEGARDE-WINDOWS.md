@@ -46,6 +46,8 @@ Un reçu privé est écrit dans `%LOCALAPPDATA%\SHENA\backups`. Il contient empr
 .\scripts\backup\Backup-SHENA.ps1 -RestoreReceipt CHEMIN_DU_RECU.json -RestoreImage IMAGE_VERIFIEE
 ```
 
+Les reçus sont aussi chiffrés localement et conservés dans Drive, sous un nouveau nom immuable par tentative. Même si une restauration échoue sur un runner éphémère, son reçu reste récupérable sans artefact GitHub. Pour retrouver le reçu le plus récent et retenter la restauration (aucun nouveau dump), utiliser `-RestoreLatest`, éventuellement avec `-RestoreImage IMAGE_VERIFIEE`. Une archive ou un reçu altéré ne passe pas l'authentification AES-GCM. Le renouvellement d'une autorisation Google réutilise le dossier privé existant et refuse un autre propriétaire au lieu de déplacer silencieusement l'historique.
+
 La même clé doit être accessible depuis le coffre séparé de la machine de restauration. Sur Linux/macOS, installer les dépendances dans un venv privé et utiliser `python scripts/backup/shena_backup.py` avec les mêmes options en kebab-case.
 
 ## GitHub Actions, sans archive ni secret publié

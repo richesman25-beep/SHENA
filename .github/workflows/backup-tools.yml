@@ -26,6 +26,16 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install -r scripts/backup/requirements.txt
+      - name: Install verified official rclone without Google credentials
+        shell: python
+        run: |
+          import os, sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts/backup')
+          from drive import ensure_rclone
+          binary = ensure_rclone(Path(os.environ['RUNNER_TEMP']) / 'shena-rclone-tools')
+          with open(os.environ['GITHUB_PATH'], 'a') as output:
+              output.write(str(Path(binary).parent) + '\n')
       - name: Test backup tooling with synthetic data only
         env:
           SHENA_BACKUP_RCLONE_TESTS: "1"

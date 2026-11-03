@@ -7,6 +7,7 @@ param(
   [switch]$AuthorizeDrive,
   [switch]$ConfigureGitHub,
   [switch]$TestConnections,
+  [switch]$RestoreLatest,
   [switch]$ShowHelp
 )
 $ErrorActionPreference = 'Stop'
@@ -35,6 +36,7 @@ foreach ($pair in @(@('--restore-image',$RestoreImage), @('--restore-receipt',$R
 if ($AuthorizeDrive) { $arguments += '--authorize-drive' }
 if ($ConfigureGitHub) { $arguments += '--configure-github' }
 if ($TestConnections) { $arguments += '--test-connections' }
+if ($RestoreLatest) { $arguments += '--restore-latest' }
 if ($ShowHelp) { $arguments += '--help' }
 & $python @arguments
 if ($LASTEXITCODE -ne 0) { throw 'Sauvegarde ou validation échouée. Aucune migration ne doit être exécutée.' }
