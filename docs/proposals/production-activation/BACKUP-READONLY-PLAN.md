@@ -23,7 +23,7 @@ Commandes de principe (variables opérateur sans valeur inventée, non exécuté
 
 ```sh
 pg_dump --format=custom --file="$SHENA_BACKUP_DIR/database.dump" --dbname="$SHENA_BACKUP_CONNECTION"
-pg_dumpall --roles-only --no-role-passwords --file="$SHENA_BACKUP_DIR/roles.sql" --database="$SHENA_BACKUP_CONNECTION"
+pg_dumpall --roles-only --no-role-passwords --file="$SHENA_BACKUP_DIR/roles.sql" --dbname="$SHENA_BACKUP_CONNECTION"
 pg_restore --list "$SHENA_BACKUP_DIR/database.dump" > "$SHENA_BACKUP_DIR/database-toc.txt"
 ```
 
