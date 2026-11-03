@@ -281,7 +281,7 @@ def authorize(binary,config):
 def configure_github(config,operator_token):
     """Valeurs uniquement sur stdin de gh ; jamais dans Git, argv ou artefacts."""
     if not shutil.which('gh'):raise RuntimeError('GitHub CLI authentifié nécessaire pour configurer les secrets privés')
-    existing=subprocess.run(['gh','secret','list','--repo','richesman25-beep/SHENA','--json','name'],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    existing=subprocess.run(['gh','secret','list','--repo','github.com/richesman25-beep/SHENA','--json','name'],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     if existing.returncode:raise RuntimeError('GitHub refuse les accès au coffre ; sauvegarde locale disponible')
     if any(item.get('name')=='SHENA_BACKUP_MASTER_KEY' for item in json.loads(existing.stdout)):
         raise RuntimeError('Clé Actions déjà présente : aucune clé remplacée automatiquement')
@@ -291,12 +291,12 @@ def configure_github(config,operator_token):
             'SHENA_BACKUP_MASTER_KEY':base64.b64encode(vault.master).decode()}
     for name,value in values.items():
         if not value:raise RuntimeError('Accès Supabase opérateur absent du coffre')
-        r=subprocess.run(['gh','secret','set',name,'--repo','richesman25-beep/SHENA'],input=value.encode(),stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        r=subprocess.run(['gh','secret','set',name,'--repo','github.com/richesman25-beep/SHENA'],input=value.encode(),stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         if r.returncode:raise RuntimeError('GitHub refuse la configuration des secrets ; sauvegarde locale disponible')
     # Déclenchement avant fusion : commit VIDE sur la branche déjà autorisée.
     # Aucun fichier, secret ou dump n'est ajouté au dépôt.
     def gh(path,body=None,method=None):
-        args=['gh','api',path]
+        args=['gh','api','--hostname','github.com',path]
         if method:args+=['--method',method]
         if body is not None:args+=['--input','-']
         result=subprocess.run(args,input=None if body is None else json.dumps(body).encode(),stdout=subprocess.PIPE,stderr=subprocess.PIPE)

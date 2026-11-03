@@ -110,6 +110,7 @@ class BackupTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):drive.configure_github(Path('/unused/config'),'SYNTHETIC')
             self.assertEqual(run.call_count,1)
             self.assertNotIn('set',run.call_args.args[0])
+            self.assertIn('github.com/richesman25-beep/SHENA',run.call_args.args[0])
 
     def test_backup_workflow_never_publishes_or_runs_on_regular_push(self):
         text=(ROOT/'.github/workflows/production-backup-drive.yml').read_text()
