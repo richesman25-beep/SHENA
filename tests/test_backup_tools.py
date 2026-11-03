@@ -62,6 +62,17 @@ class BackupTests(unittest.TestCase):
             self.assertEqual(env['PGSSLMODE'],'verify-full')
             self.assertIn('default_transaction_read_only=on',env['PGOPTIONS'])
 
+    def test_public_os_ca_bundle_is_portable_and_empty_trust_is_refused(self):
+        import ssl,types
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'ca.pem';runner.write_ca_bundle(path)
+            context=ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            context.load_verify_locations(cafile=str(path))
+            self.assertGreater(len(context.get_ca_certs()),0)
+            with patch.object(runner.ssl,'create_default_context',return_value=types.SimpleNamespace(get_ca_certs=lambda **kw:[])):
+                with self.assertRaises(runner.SourceSecurityError):runner.write_ca_bundle(Path(folder)/'empty.pem')
+            self.assertFalse((Path(folder)/'empty.pem').exists())
+
     def test_private_output_refuses_repository(self):
         with self.assertRaises(ValueError):core.private_directory(ROOT/'not-a-backup')
         with tempfile.TemporaryDirectory() as folder:

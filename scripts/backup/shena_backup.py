@@ -7,6 +7,7 @@ import os
 import re
 from pathlib import Path
 import shutil
+import ssl
 import subprocess
 import sys
 import tarfile
@@ -56,12 +57,20 @@ def source_endpoints(project, poolers):
     return result
 
 
+def write_ca_bundle(path):
+    # libpq/OpenSSL n'utilise pas toujours le magasin Windows automatiquement.
+    # Python charge les autorités approuvées de l'OS : certificats PUBLICS seuls.
+    certificates=ssl.create_default_context().get_ca_certs(binary_form=True)
+    if not certificates:raise SourceSecurityError('Aucune autorité de certification approuvée disponible')
+    Path(path).write_text(''.join(ssl.DER_cert_to_PEM_cert(c) for c in certificates),encoding='ascii')
+
+
 def pg_env(host, port, user, password_file):
     env = os.environ.copy()
     for name in ('PGPASSWORD','PGSERVICE','PGSERVICEFILE','PGHOSTADDR','PGOPTIONS','PGDATABASE','PGUSER','PGPORT','PGHOST','PGPASSFILE','PGSSLMODE','PGSSLROOTCERT'):
         env.pop(name, None)
     env.update(PGHOST=host, PGPORT=str(port), PGUSER=user, PGDATABASE='postgres', PGPASSFILE=str(password_file),
-               PGSSLMODE='verify-full', PGSSLROOTCERT='system', PGCONNECT_TIMEOUT='10',
+               PGSSLMODE='verify-full', PGSSLROOTCERT=str(password_file.parent/'ca.pem'), PGCONNECT_TIMEOUT='10',
                PGOPTIONS='-c default_transaction_read_only=on -c search_path=pg_catalog -c timezone=UTC')
     return env
 
@@ -82,6 +91,7 @@ def prepare_pg_tools():
 
 def pg_call(program, args, env, stdout=None):
     if CLIENT_IMAGE:
+        env=env.copy();env['PGSSLROOTCERT']='/work/ca.pem'
         work=Path(env['PGPASSFILE']).parent.resolve()
         mapped=[]
         for arg in args:
@@ -104,6 +114,7 @@ def pg_call(program, args, env, stdout=None):
 
 def connect_source(token, project, work):
     endpoints = source_endpoints(project, api(token, '/config/database/pooler'))
+    write_ca_bundle(work/'ca.pem')
     credentials = api(token, '/cli/login-role', {'read_only': True})
     role = credentials['role']; password = credentials['password']
     if not re.fullmatch(r'[a-zA-Z_][a-zA-Z0-9_]{0,62}',role) or any(c in password for c in ('\n','\r','\0')): raise RuntimeError('Identifiants temporaires non conformes')
@@ -117,7 +128,7 @@ def connect_source(token, project, work):
         conn = None
         try:
             conn = psycopg.connect(host=host, port=port, dbname='postgres', user=user, password=password,
-                sslmode='verify-full', sslrootcert='system', connect_timeout=10, autocommit=True,
+                sslmode='verify-full', sslrootcert=str(work/'ca.pem'), connect_timeout=10, autocommit=True,
                 options='-c default_transaction_read_only=on -c search_path=pg_catalog -c timezone=UTC')
             conn.execute(sql.SQL('SET ROLE {}').format(sql.Identifier(ROLE)))
             # Test du même transport et de la même sélection de rôle que pg_dump.
@@ -198,6 +209,7 @@ def capture(token, project, work):
             (work/name).write_text(json.dumps(value,sort_keys=True))
         # Ne jamais archiver pgpass ni les identifiants API temporaires.
         (work/'pgpass').unlink(missing_ok=True)
+        (work/'ca.pem').unlink(missing_ok=True)
         names=[p for p in work.rglob('*') if p.is_file()]
         manifest={'project_ref':REF,'connection_mode':mode,'preloads':preloads,'files':{p.relative_to(work).as_posix():digest(p) for p in names}}
         (work/'manifest.json').write_text(json.dumps(manifest,sort_keys=True))
