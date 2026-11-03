@@ -226,9 +226,14 @@ def authorize(binary,config):
 def configure_github(config,operator_token):
     """Valeurs uniquement sur stdin de gh ; jamais dans Git, argv ou artefacts."""
     if not shutil.which('gh'):raise RuntimeError('GitHub CLI authentifié nécessaire pour configurer les secrets privés')
+    existing=subprocess.run(['gh','secret','list','--repo','richesman25-beep/SHENA','--json','name'],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    if existing.returncode:raise RuntimeError('GitHub refuse les accès au coffre ; sauvegarde locale disponible')
+    if any(item.get('name')=='SHENA_BACKUP_MASTER_KEY' for item in json.loads(existing.stdout)):
+        raise RuntimeError('Clé Actions déjà présente : aucune clé remplacée automatiquement')
     vault=LocalVault()
-    values={'SHENA_RCLONE_CONFIG_B64':base64.b64encode(Path(config).read_bytes()).decode(),'SHENA_BACKUP_MASTER_KEY':base64.b64encode(vault.master).decode(),
-            'SUPABASE_ACCESS_TOKEN':operator_token}
+    values={'SHENA_BACKUP_SUPABASE_TOKEN':operator_token,
+            'SHENA_RCLONE_CONFIG_B64':base64.b64encode(Path(config).read_bytes()).decode(),
+            'SHENA_BACKUP_MASTER_KEY':base64.b64encode(vault.master).decode()}
     for name,value in values.items():
         if not value:raise RuntimeError('Accès Supabase opérateur absent du coffre')
         r=subprocess.run(['gh','secret','set',name,'--repo','richesman25-beep/SHENA'],input=value.encode(),stdout=subprocess.PIPE,stderr=subprocess.PIPE)

@@ -97,6 +97,13 @@ class BackupTests(unittest.TestCase):
                 self.assertNotIn('SYNTHETIC',str(run.call_args.args))
                 for key in ('SUPABASE_ACCESS_TOKEN','SHENA_BACKUP_MASTER_KEY','SHENA_RCLONE_CONFIG_B64'):self.assertNotIn(key,run.call_args.kwargs['env'])
 
+    def test_github_setup_never_overwrites_existing_key(self):
+        import types
+        with patch.object(drive.shutil,'which',return_value='gh'),patch.object(drive.subprocess,'run',return_value=types.SimpleNamespace(returncode=0,stdout=b'[{"name":"SHENA_BACKUP_MASTER_KEY"}]')) as run:
+            with self.assertRaises(RuntimeError):drive.configure_github(Path('/unused/config'),'SYNTHETIC')
+            self.assertEqual(run.call_count,1)
+            self.assertNotIn('set',run.call_args.args[0])
+
     def test_backup_workflow_never_publishes_or_runs_on_regular_push(self):
         text=(ROOT/'.github/workflows/production-backup-drive.yml').read_text()
         self.assertNotIn('uses: actions/upload-artifact',text)
