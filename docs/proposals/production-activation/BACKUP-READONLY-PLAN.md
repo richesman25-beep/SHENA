@@ -34,3 +34,18 @@ SHENA_BACKUP_CONNECTION doit exclure le mot de passe ; pgpass le fournit. Le dum
 Restaurer dans une instance Supabase/PostgreSQL compatible isolée, sans emails, webhook, cron, paiements ni exposition publique. Provisionner uniquement les rôles/ extensions compatibles nécessaires : ne pas rejouer aveuglément les rôles système de Production. Restaurer le dump avec arrêt sur erreur ; vérifier schémas, données, contraintes, séquences, fonctions, ACL et RLS. Réconcilier les inventaires et tester anon/client/deux admins sur cette copie. Restaurer les octets Storage dans un service isolé et vérifier contenu, noms, confidentialité et politiques ; ne pas recopier les fichiers dans Production.
 
 Produire ensuite un manifeste signé/contrôlé avec empreintes et résultats, chiffrer base et Storage, conserver une copie privée durable autorisée et la clé séparément. Ni checksums seuls, ni copie de fichiers seule, ni paramètre SQL déclaratif ne valident une restauration. Ne positionner aucune attestation backup_restore_verified tant que cette procédure n'a pas réussi et été examinée.
+
+## Destination durable privée proposée — non provisionnée
+
+Prévoir un stockage objet privé hors du projet Supabase source, dans un compte marchand autorisé : accès public entièrement bloqué, TLS obligatoire, versioning activé et politique de rétention protégeant le point de restauration avant migration. Les comptes de l'application et les clés publiques Supabase n'y ont aucun accès. Le compte de sauvegarde peut écrire et vérifier uniquement le préfixe dédié ; la suppression et la récupération des clés sont réservées à un autre accès opérateur. Définir la rétention avant toute règle automatique de suppression. Ne pas créer de bucket payant ni choisir un compte externe à la place du propriétaire.
+
+Chiffrer chaque archive PostgreSQL/Storage côté client avec une clé AES-256-GCM aléatoire, puis contrôler le SHA256 après transfert et relecture distante. Ne jamais joindre la clé à l'archive ni à son manifeste. Conserver cette clé dans un gestionnaire de secrets distinct du stockage de sauvegarde, avec contrôle d'accès et procédure de récupération ; aucun mot de passe ou clé dans Git, les logs CI ou le navigateur. Le chiffrement serveur du stockage est complémentaire. Tester la récupération de la clé et le déchiffrement depuis l'environnement de restauration avant de déclarer ce prérequis satisfait.
+
+Aucune destination durable ni identité d'accès correspondante n'est actuellement configurée dans cet environnement. Les fichiers /tmp existants et la clé séparée sont des artefacts locaux éphémères ; ils ne constituent pas la conservation indépendante demandée. Une destination privée autorisée et son accès sécurisé sont nécessaires avant tout transfert. Ne pas demander de recopier des secrets dans le chat.
+
+## Validation finale exigée avant le premier script persistant
+
+- Dump complet terminé sans erreur, couvertures PostgreSQL et Auth vérifiées et limites documentées ; rôles et extensions réconciliés, sans mots de passe système exportés.
+- Stockage durable relu et déchiffré depuis une machine isolée, avec clé récupérée séparément ; tous les objets Storage rapprochés de leur inventaire.
+- Restauration réelle de la base et du service Storage compatible réussie, incluant les refus d'accès anon/client et les accès des deux comptes administrateurs sur la copie. Aucune restauration par écrasement de Production.
+- Manifeste et preuves examinés ; seulement ensuite, accord nominatif du propriétaire sur l'empreinte SHA256 de chaque script persistant. Une CI verte seule ne constitue pas cette validation.

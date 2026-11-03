@@ -36,5 +36,7 @@ jobs:
           path: |
             test-results/demo/
             test-results/live/
+            test-results/admin-failure.txt
+            test-results/admin-failure.png
           if-no-files-found: ignore
           retention-days: 3
