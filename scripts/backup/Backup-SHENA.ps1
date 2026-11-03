@@ -1,4 +1,4 @@
-# Windows PowerShell 5.1 / PowerShell 7. Aucun secret en argument ou dans Git.
+﻿# Windows PowerShell 5.1 / PowerShell 7. Aucun secret en argument ou dans Git.
 [CmdletBinding()]
 param(
   [string]$AwsProfile,
@@ -9,7 +9,8 @@ param(
   [string]$RestoreReceipt,
   [string]$OutputDirectory,
   [switch]$ProvisionDestination,
-  [switch]$TestConnections
+  [switch]$TestConnections,
+  [switch]$ShowHelp
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -18,12 +19,12 @@ $venv = Join-Path $toolRoot 'venv'
 $python = Join-Path $venv 'Scripts\python.exe'
 if (-not (Test-Path $python)) {
   New-Item -ItemType Directory -Force -Path $toolRoot | Out-Null
-  if (Get-Command py -ErrorAction SilentlyContinue) { & py -3 -m venv $venv }
-  elseif (Get-Command python -ErrorAction SilentlyContinue) { & python -m venv $venv }
+  if (Get-Command python -ErrorAction SilentlyContinue) { & python -m venv $venv }
+  elseif (Get-Command py -ErrorAction SilentlyContinue) { & py -3 -m venv $venv }
   else { throw 'Python 3.12 ou plus récent doit être installé sur cet ordinateur.' }
-  if ($LASTEXITCODE -ne 0) { throw 'Création de l’environnement Python impossible.' }
+  if ($LASTEXITCODE -ne 0) { throw "Creation de l'environnement Python impossible." }
 }
-& $python -c 'import sys; assert sys.version_info >= (3,12), "Python 3.12+ requis"'
+& $python -c 'import sys; assert sys.version_info >= (3,12)'
 if ($LASTEXITCODE -ne 0) { throw 'Python incompatible.' }
 & $python -m pip install --disable-pip-version-check -r (Join-Path $PSScriptRoot 'requirements.txt')
 if ($LASTEXITCODE -ne 0) { throw 'Installation des dépendances impossible ; ne pas désactiver TLS.' }
@@ -36,5 +37,6 @@ foreach ($pair in @(@('--aws-profile',$AwsProfile), @('--bucket',$Bucket), @('--
 }
 if ($ProvisionDestination) { $arguments += '--provision-destination' }
 if ($TestConnections) { $arguments += '--test-connections' }
+if ($ShowHelp) { $arguments += '--help' }
 & $python @arguments
 if ($LASTEXITCODE -ne 0) { throw 'Sauvegarde ou validation échouée. Aucune migration ne doit être exécutée.' }

@@ -24,6 +24,9 @@ from core import REF, REPO, CHUNK, checked, digest, private_directory, encrypt_f
 API = 'https://api.supabase.com/v1/projects/' + REF
 ROLE = 'supabase_read_only_user'
 
+class SourceSecurityError(RuntimeError):
+    pass
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs): raise RuntimeError('Redirection HTTP refusée pour protéger les identifiants')
 
@@ -153,18 +156,19 @@ def connect_source(token, project, work):
             return conn, env, mode
         except (psycopg.Error, RuntimeError) as e:
             if conn: conn.close()
+            if isinstance(e,SourceSecurityError):raise
             failures.append(mode + ':' + (e.sqlstate or 'connection') if isinstance(e, psycopg.Error) else mode + ':client')
     raise RuntimeError('Connexions officielles refusées (' + ','.join(failures) + '). Aucun contournement tenté.')
 
 
 def check_source(conn):
     row = conn.execute("SELECT current_user,current_database(),current_setting('transaction_read_only'),current_setting('server_version_num')::int").fetchone()
-    if row[:3] != (ROLE,'postgres','on') or not 170000 <= row[3] < 180000: raise RuntimeError('Identité SQL/version/lecture seule inattendue')
+    if row[:3] != (ROLE,'postgres','on') or not 170000 <= row[3] < 180000: raise SourceSecurityError('Identité SQL/version/lecture seule inattendue')
     flags = conn.execute("SELECT rolsuper,rolcreaterole,rolcreatedb,rolreplication,rolbypassrls FROM pg_roles WHERE rolname=current_user").fetchone()
-    if flags != (False,False,False,False,True): raise RuntimeError('Rôle sauvegarde non conforme ; aucune permission modifiée')
+    if flags != (False,False,False,False,True): raise SourceSecurityError('Rôle sauvegarde non conforme ; aucune permission modifiée')
     unsafe = conn.execute("SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind IN('r','p') AND n.nspname NOT LIKE 'pg_%' AND n.nspname<>'information_schema' AND (has_table_privilege(c.oid,'INSERT') OR has_table_privilege(c.oid,'UPDATE') OR has_table_privilege(c.oid,'DELETE') OR has_table_privilege(c.oid,'TRUNCATE') OR has_any_column_privilege(c.oid,'INSERT') OR has_any_column_privilege(c.oid,'UPDATE'))").fetchone()[0]
-    if unsafe: raise RuntimeError('Rôle de sauvegarde possède un droit écriture : arrêt')
-    if conn.execute("SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname IN('public','auth','storage') AND has_schema_privilege(oid,'CREATE'))").fetchone()[0]: raise RuntimeError('Droit CREATE inattendu')
+    if unsafe: raise SourceSecurityError('Rôle de sauvegarde possède un droit écriture : arrêt')
+    if conn.execute("SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname IN('public','auth','storage') AND has_schema_privilege(oid,'CREATE'))").fetchone()[0]: raise SourceSecurityError('Droit CREATE inattendu')
 
 
 def storage_state(conn):

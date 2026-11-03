@@ -167,7 +167,8 @@ def restore_database(root, image, expected, preloads):
             checked(['docker', 'exec', '-i', name, 'pg_restore', '-h', '/tmp', '-U', 'postgres', '--exit-on-error', '--single-transaction', '--dbname=postgres'], stdin=inp)
         for table in expected['tables']:
             query = table_hash_query(table['schema'], table['table'])
-            result = checked(['docker', 'exec', name, 'psql', '-X', '-h', '/tmp', '-U', 'postgres', '-d', 'postgres', '-Atq', '-v', 'ON_ERROR_STOP=1', '-c', "SET search_path=pg_catalog; SET TIME ZONE 'UTC';" + query]).decode().splitlines()
+            result = checked(['docker', 'exec', name, 'psql', '-X', '-h', '/tmp', '-U', 'postgres', '-d', 'postgres', '-Atq', '-v', 'ON_ERROR_STOP=1', '-c', "SET search_path=pg_catalog; SET TIME ZONE 'UTC';" + query]).decode().split('\n')
+            result = [row for row in result if row]
             if result and result[0] == 'SET': result = result[1:]
             h = hashlib.sha256()
             for row in result: h.update(row.encode() + b'\n')

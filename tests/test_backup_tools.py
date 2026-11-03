@@ -127,9 +127,10 @@ class BackupTests(unittest.TestCase):
                 time.sleep(.5)
             def psql(q):return core.checked(['docker','exec','-i',name,'psql','-X','-U','postgres','-Atq','-v','ON_ERROR_STOP=1'],input=("SET search_path=pg_catalog;SET TIME ZONE 'UTC';"+q).encode()).decode()
             psql('CREATE ROLE anon;CREATE TABLE public.fixture(id integer PRIMARY KEY,label text NOT NULL);INSERT INTO public.fixture VALUES(1,\'SYNTHETIC ONLY\');ALTER TABLE public.fixture ENABLE ROW LEVEL SECURITY;GRANT SELECT ON public.fixture TO anon;CREATE POLICY active ON public.fixture FOR SELECT TO anon USING(true);')
+            psql("UPDATE public.fixture SET label='SYNTHETIC — Haïti\u2028ONLY';")
             psql("CREATE VIEW public.fixture_view AS SELECT id FROM public.fixture;GRANT UPDATE(label) ON public.fixture TO anon;CREATE FUNCTION public.fixture_check() RETURNS boolean LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog AS $$ SELECT true $$;REVOKE EXECUTE ON FUNCTION public.fixture_check() FROM PUBLIC;GRANT EXECUTE ON FUNCTION public.fixture_check() TO anon;CREATE SEQUENCE public.fixture_sequence;SELECT nextval('public.fixture_sequence');")
             psql("CREATE ROLE supabase_admin SUPERUSER NOLOGIN;CREATE FUNCTION public.fixture_event() RETURNS event_trigger LANGUAGE plpgsql AS $$ BEGIN RETURN; END $$;CREATE EVENT TRIGGER fixture_event ON ddl_command_end WHEN TAG IN ('CREATE TABLE') EXECUTE FUNCTION public.fixture_event();ALTER EVENT TRIGGER fixture_event OWNER TO supabase_admin;")
-            rows=psql(core.table_hash_query('public','fixture')).splitlines()
+            rows=[row for row in psql(core.table_hash_query('public','fixture')).split('\n') if row]
             import hashlib
             h=hashlib.sha256()
             for row in rows:h.update(row.encode()+b'\n')

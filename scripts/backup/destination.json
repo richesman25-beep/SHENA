@@ -14,12 +14,22 @@
           "RestrictPublicBuckets": true
         },
         "OwnershipControls": {
-          "Rules": [{ "ObjectOwnership": "BucketOwnerEnforced" }]
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
         },
-        "VersioningConfiguration": { "Status": "Enabled" },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
-            { "ServerSideEncryptionByDefault": { "SSEAlgorithm": "AES256" } }
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
           ]
         }
       }
@@ -27,7 +37,9 @@
     "TransportPolicy": {
       "Type": "AWS::S3::BucketPolicy",
       "Properties": {
-        "Bucket": { "Ref": "Archive" },
+        "Bucket": {
+          "Ref": "Archive"
+        },
         "PolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -36,14 +48,24 @@
               "Principal": "*",
               "Action": "s3:*",
               "Resource": [
-                { "Fn::GetAtt": ["Archive", "Arn"] },
-                { "Fn::Sub": "${Archive.Arn}/*" }
+                {
+                  "Fn::GetAtt": ["Archive", "Arn"]
+                },
+                {
+                  "Fn::Sub": "${Archive.Arn}/*"
+                }
               ],
-              "Condition": { "Bool": { "aws:SecureTransport": "false" } }
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
             }
           ]
         }
-      }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
     },
     "EnvelopeKey": {
       "Type": "AWS::KMS::Key",
@@ -72,7 +94,15 @@
     }
   },
   "Outputs": {
-    "Bucket": { "Value": { "Ref": "Archive" } },
-    "KmsKey": { "Value": { "Fn::GetAtt": ["EnvelopeKey", "Arn"] } }
+    "Bucket": {
+      "Value": {
+        "Ref": "Archive"
+      }
+    },
+    "KmsKey": {
+      "Value": {
+        "Fn::GetAtt": ["EnvelopeKey", "Arn"]
+      }
+    }
   }
 }
