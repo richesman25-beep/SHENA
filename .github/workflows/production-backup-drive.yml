@@ -1,0 +1,48 @@
+name: Private Drive backup
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/shena-production-activation]
+permissions:
+  contents: read
+concurrency:
+  group: shena-private-backup
+  cancel-in-progress: false
+jobs:
+  backup:
+    if: >-
+      github.repository == 'richesman25-beep/SHENA' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/shena-production-activation') &&
+      (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[shena-backup-run]'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Require private access before any Production request
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SHENA_RCLONE_CONFIG_B64: ${{ secrets.SHENA_RCLONE_CONFIG_B64 }}
+          SHENA_BACKUP_MASTER_KEY: ${{ secrets.SHENA_BACKUP_MASTER_KEY }}
+        shell: bash
+        run: |
+          for name in SUPABASE_ACCESS_TOKEN SHENA_RCLONE_CONFIG_B64 SHENA_BACKUP_MASTER_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "Required private access missing: $name"
+              exit 1
+            fi
+          done
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r scripts/backup/requirements.txt
+      - name: Backup encrypted to private Drive and verify isolated restore
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SHENA_RCLONE_CONFIG_B64: ${{ secrets.SHENA_RCLONE_CONFIG_B64 }}
+          SHENA_BACKUP_MASTER_KEY: ${{ secrets.SHENA_BACKUP_MASTER_KEY }}
+        run: python scripts/backup/shena_backup.py --output "$RUNNER_TEMP/shena-private-backup"
+      - name: Remove only this job's private temporary files
+        if: always()
+        shell: bash
+        run: rm -rf -- "$RUNNER_TEMP/shena-private-backup"
+      # Aucun upload-artifact, commit, migration, paiement ou déploiement.

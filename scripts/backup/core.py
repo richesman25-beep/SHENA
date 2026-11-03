@@ -54,7 +54,7 @@ def encrypt_file(source, target, key, wrapped_key, key_id, backup_id):
     return header
 
 
-def decrypt_file(source, target, kms, expected_key_id, expected_backup_id):
+def decrypt_file(source, target, key_provider, expected_key_id, expected_backup_id):
     target = Path(target)
     created = False
     try:
@@ -67,8 +67,8 @@ def decrypt_file(source, target, kms, expected_key_id, expected_backup_id):
             raw = inp.read(size); header = json.loads(raw)
             if header['project_ref'] != REF or header['key_id'] != expected_key_id or header['backup_id'] != expected_backup_id:
                 raise ValueError('Cible ou clé inattendue')
-            key = kms.decrypt(KeyId=expected_key_id, CiphertextBlob=base64.b64decode(header['wrapped_key']),
-                              EncryptionContext={'project_ref': REF, 'backup_id': expected_backup_id})['Plaintext']
+            key = key_provider.unwrap(base64.b64decode(header['wrapped_key']),
+                              {'project_ref': REF, 'backup_id': expected_backup_id},expected_key_id)
             start = inp.tell(); inp.seek(0, 2); end = inp.tell() - 16
             if end < start: raise ValueError('Archive tronquée')
             inp.seek(end); tag = inp.read(16); inp.seek(start)

@@ -1,69 +1,71 @@
-# Sauvegarder SHENA depuis Windows ou un exécuteur sécurisé
+# Sauvegardes gratuites : Google Drive + coffre séparé
 
-Cette procédure ne modifie pas le schéma, les produits, Auth ou les permissions de Production. La seule opération préparatoire sur Production est la création/renouvellement du rôle temporaire `read_only` déjà autorisée. Aucun script de migration, activation commerciale, fusion ou déploiement n'est appelé. Ne pas lancer cet outil dans le réseau Codex actuellement bloqué : il est prévu pour votre ordinateur ou un runner autorisé.
+Les outils `scripts/backup/` utilisent désormais **rclone et Google Drive**. Aucun compte AWS, S3, KMS, abonnement supplémentaire ou création de ressource payante. Le stockage utilise votre quota Drive existant ; s'il est plein, le transfert échoue sans supprimer d'ancienne sauvegarde ni acheter d'espace.
 
-## Une commande sur Windows
+## Autorisation Google initiale
 
-Depuis le checkout de la PR nº 4, avec Python **3.12+** et Docker Desktop démarré :
-
-```powershell
-.\scripts\backup\Backup-SHENA.ps1 -ProvisionDestination
-```
-
-Le compte AWS doit déjà être authentifié par votre méthode habituelle (SSO, rôle ou gestionnaire sécurisé). Un profil existant peut être choisi avec `-AwsProfile NOM_DU_PROFIL`. Aucun nom de profil ni compte AWS n'est supposé existant. La région proposée est `us-east-2`, comme le projet source ; `-Region` permet de choisir une autre région autorisée.
-
-`-ProvisionDestination` autorise explicitement la création du stockage privé S3 et de la clé AWS KMS via le modèle [destination.json](../scripts/backup/destination.json). Ces ressources sont facturables et restent conservées si la stack est supprimée. Le bucket est privé, bloque les accès publics, refuse le HTTP, conserve les versions et n'a aucune expiration automatique. L'outil ne modifie pas une stack existante pour forcer sa conformité : il s'arrête si les prérequis ne sont pas satisfaits. Il ne supprime aucun objet ni clé.
-
-Si vous disposez déjà des ressources autorisées :
+Depuis le checkout de la PR nº 4, sur votre Windows avec Python 3.12+ et Docker Desktop démarré :
 
 ```powershell
-.\scripts\backup\Backup-SHENA.ps1 -Bucket NOM_DU_BUCKET_PRIVE -KmsKey ARN_DE_LA_CLE_KMS
+.\scripts\backup\Backup-SHENA.ps1 -AuthorizeDrive
 ```
 
-Le jeton opérateur Supabase est demandé **en saisie masquée sur votre ordinateur** ; il n'est ni enregistré ni passé en argument. Un gestionnaire qui fournit déjà `SUPABASE_ACCESS_TOKEN` au processus évite cette saisie. Ne pas copier ce secret dans le chat, un fichier Git, une commande ou un journal. Le script crée son environnement Python hors dépôt et réutilise les clients PostgreSQL 17 installés ; sinon il utilise les clients officiels dans Docker. Il n'installe aucun service PostgreSQL Windows.
+Le lanceur installe ses dépendances hors Git et réutilise rclone s'il est installé ; sinon il télécharge le binaire officiel et vérifie le SHA256 publié en HTTPS. Il ouvre l'autorisation Google dans votre navigateur. Choisir votre compte et autoriser **rclone** à accéder seulement aux fichiers utilisés/créés par l'application (`drive.file`), pas à l'ensemble des documents Drive. Aucun code OAuth à envoyer dans le chat. Le script crée un dossier personnel neuf `SHENA encrypted backups`, sans partage, et vérifie qu'il n'a que son propriétaire. Aucun ancien fichier/dossier n'est supprimé, partagé ou déplacé.
 
-Le wrapper est destiné à Windows PowerShell 5.1 ou PowerShell 7. Respecter la politique d'exécution de votre organisation ; ne pas la désactiver pour lancer ce fichier. Le lecteur de travail doit être privé et chiffré (par exemple BitLocker). Les ACL Windows limitent le répertoire de travail au SID courant ; sous Linux les permissions sont 0700. Ne pas utiliser un dossier synchronisé publiquement ou partagé. Prévoir l'espace du dump, des objets et de la restauration Docker ; l'instance temporaire utilise un tmpfs et nécessite assez de mémoire.
+Après l'autorisation, la sauvegarde locale puis sa restauration isolée sont lancées. Le jeton Supabase déjà autorisé est lu du gestionnaire sécurisé du processus ou du coffre Windows ; seulement s'il n'y est pas encore disponible localement, il est demandé en saisie masquée et mémorisé dans ce coffre. Le jeton configuré dans Codex n'est pas exporté par les outils dans votre ordinateur. Il n'est jamais passé en argument ni enregistré dans Git. Aucune commande SQL manuelle n'est demandée.
 
-## Ce que la commande fait
-
-1. Installe les dépendances dans `%LOCALAPPDATA%\SHENA\backup-tools`, vérifie les outils, puis identifie le projet **xxadpoebcslutlevzdsy** via l'API officielle. Les hôtes proviennent de Supabase. Connexion directe puis Session Pooler sur **5432**, TLS `verify-full`, certificat vérifié ; aucun Transaction Pooler 6543 ni tunnel détourné.
-2. Crée l'accès temporaire déjà approuvé, sélectionne `supabase_read_only_user` et vérifie la lecture seule, l'absence de droits d'écriture/CREATE et le BYPASSRLS nécessaire à une sauvegarde complète. RLS n'est pas désactivé. Un certificat non reconnu, un hôte différent ou un privilège inattendu fait arrêter l'outil.
-3. Exporte les rôles sans leurs mots de passe, puis lance **pg_dump custom complet**, sans filtrer les schémas, en conservant propriétaires et ACL. Un snapshot PostgreSQL exporté est partagé avec le dump et l'inventaire de contrôle. Le dump n'est pas limité à products : Auth et Storage PostgreSQL sont inclus si les permissions et extensions le permettent. Une table étrangère ou un refus d'accès exige un plan spécifique, jamais une omission silencieuse.
-4. Copie tous les objets de tous les buckets, y compris privés, via l'API Storage officielle. Une clé serveur Storage peut être lue par l'API opérateur si nécessaire ; elle reste en mémoire et n'est jamais exposée au navigateur, à Docker ou à Git. Compare inventaire et tailles après capture ; un changement concurrent de Storage impose de recommencer.
-5. Construit une archive avec dump, rôles, catalogues, hashes des lignes et objets. La chiffre en flux **AES-256-GCM** avec une clé de données aléatoire générée par KMS. La clé maîtresse reste dans KMS ; seule la clé de données **enveloppée, indéchiffrable sans KMS**, est dans l'en-tête authentifié. Aucun fichier de clé en clair n'est conservé. Les fichiers temporaires en clair et pgpass sont supprimés à la fin, même en cas d'erreur ; une suppression n'est pas un effacement physique garanti sur SSD.
-6. Transfère l'archive chiffrée dans S3, exige un VersionId, relit exactement cette version et compare son SHA256. Le compte propriétaire du bucket et l'état de la clé sont contrôlés. La clé KMS est un service distinct du stockage des archives ; l'accès S3 seul ne suffit pas au déchiffrement. Un rôle de restauration séparé peut recevoir uniquement lecture + déchiffrement.
-7. Retélécharge cette version distante, demande le déchiffrement à KMS et restaure dans un conteneur éphémère **sans réseau, sans port publié et sans montage hôte**. Une image Supabase compatible est requise. Le tag est proposé uniquement depuis la version réellement fournie par l'API ; s'il n'existe pas ou manque une extension, l'outil s'arrête. `-RestoreImage IMAGE_VERIFIEE` permet de fournir une image compatible ; son digest est résolu et enregistré. Ne pas choisir une image tierce inconnue.
-8. Vérifie toutes les tables inventoriées, nombres de lignes, SHA256 des lignes triées, contraintes, ACL de table/colonnes/fonctions, politiques RLS, fonctions, vues, triggers et versions d'extensions, ainsi que tous les octets Storage restaurés. Tout écart ou erreur pg_restore échoue. Les rôles sont créés **sans login** ; le SQL complet roles.sql n’est pas rejoué aveuglément. Un adaptateur limité aux rôles fournisseur connus reproduit BYPASSRLS et le SUPERUSER de supabase_admin seulement si ces attributs sont réellement présents dans la source, uniquement dans le conteneur sans réseau : PostgreSQL exige un propriétaire superuser pour les event triggers Supabase. Tout autre rôle source superuser/BYPASSRLS inconnu fait arrêter l’outil. Ces adaptations sont listées dans le reçu ; elles ne donnent aucun droit en Production et ne constituent pas une validation des appartenances système.
-
-Le rôle temporaire ne dure que cinq minutes. Les clients et images de clients sont préparés avant sa création ; les connexions du dump/roles sont ouvertes avant expiration. Le snapshot reste ouvert jusqu'à la fin. Pour une très grande base, valider le budget de durée/connexions avant cette procédure ; ne pas rallonger les permissions ou renouveler un mot de passe en boucle pour masquer un échec.
-
-## Tester ou reprendre sans tout refaire
-
-Tester seulement les connexions et droits (aucune destination AWS nécessaire) :
+Pour les exécutions suivantes, aucune nouvelle autorisation Google tant que son jeton de renouvellement reste valide :
 
 ```powershell
-.\scripts\backup\Backup-SHENA.ps1 -TestConnections
+.\scripts\backup\Backup-SHENA.ps1
 ```
 
-Rejouer la restauration depuis une archive déjà conservée, sur une autre machine autorisée, **sans jeton Supabase ni nouveau dump** :
+## Chiffrement et séparation des secrets
+
+La clé maîtresse aléatoire de 256 bits est conservée dans **Gestionnaire d'identifiants Windows**, distinct de Google Drive. macOS Keychain ou Linux Secret Service sont aussi acceptés ; un backend de fichier plaintext est refusé. La configuration OAuth est également conservée dans ce coffre, en fragments de taille compatible Windows, et matérialisée seulement dans un répertoire temporaire privé pendant l'exécution. Le jeton Google est renouvelé automatiquement par rclone.
+
+Chaque sauvegarde utilise une nouvelle clé de données et un nonce aléatoires. L'archive est chiffrée localement en flux AES-256-GCM. La clé de données est elle-même enveloppée par AES-GCM sous la clé maîtresse, avec contexte projet + identifiant de sauvegarde. Seule cette clé **chiffrée** accompagne l'archive ; la clé maîtresse n'est jamais transférée vers Drive. Ne pas remplacer cette clé par un mot de passe humain faible.
+
+Le coffre Windows doit rester récupérable : en conserver une sauvegarde sécurisée ou une copie de la clé dans un coffre gratuit indépendant tel que KeePassXC sur un support hors Drive. **Perdre le coffre et toutes ses copies rend les archives indéchiffrables.** Le programme ne publie pas une clé de secours et ne suppose pas que la sauvegarde du profil Windows est déjà activée. L'option Actions ci-dessous conserve une copie dans son coffre de secrets chiffrés, également distinct de Drive. Les appartenances et accès aux coffres doivent rester limités aux opérateurs autorisés.
+
+## Sauvegarde et contrôles automatiques
+
+- Identifie SHENA Production `xxadpoebcslutlevzdsy`, teste connexion directe puis **Session Pooler 5432** en TLS `verify-full`, sans Transaction Pooler ni contournement du réseau Codex. Clients PostgreSQL 17 natifs ou Docker officiels. Les outils sont préparés avant la création de l'accès temporaire de cinq minutes déjà autorisé.
+- Sélectionne le rôle read_only, vérifie l'absence d'écriture/CREATE et le BYPASSRLS nécessaire à la lecture de toutes les lignes. Aucun RLS n'est désactivé. Une incohérence de rôle interrompt le programme.
+- Exporte les rôles sans leurs mots de passe et un **pg_dump custom complet**, sans filtre de schéma, avec snapshot exporté partagé avec l'inventaire des données. Auth et les métadonnées Storage sont incluses si les permissions et extensions le permettent ; un refus n'est jamais masqué.
+- Télécharge les objets de tous les buckets Supabase, privés compris. La clé serveur Storage éventuellement nécessaire reste en mémoire et n'est jamais fournie au navigateur ni à Git. Taille et inventaire avant/après sont comparés. Un changement concurrent impose un nouveau passage.
+- Chiffre avant tout transfert, utilise un nouveau chemin UUID, refuse l'écrasement et vérifie que dossier et archive ne sont pas partagés, y compris avec un second utilisateur. Aucun `sync`, `delete`, lien public ou changement des permissions Google. Drive n'est pas un stockage WORM : le propriétaire peut supprimer ses fichiers ; le hash authentifié et l'identifiant Drive détectent une substitution.
+- Retélécharge depuis Drive et compare SHA256, vérifie l'enveloppe AES-GCM, les chemins de l'archive et chaque fichier, puis restaure PostgreSQL dans un conteneur **sans réseau, port publié ni montage hôte**. L'image Supabase compatible est résolue depuis la version réelle et son digest enregistré. En cas d'image/extension incompatible, arrêt et possibilité de reprendre avec `-RestoreImage IMAGE_VERIFIEE`.
+- Compare tables, lignes, hashes, contraintes, ACL, RLS, fonctions, vues, séquences et event triggers. L'adaptation limitée des rôles fournisseur s'applique uniquement à cette instance isolée ; aucun rejeu aveugle de roles.sql, aucun rôle inconnu élevé automatiquement. Vérifie aussi les octets de chaque fichier Storage restauré.
+
+Les fichiers temporaires en clair et les configurations OAuth sont hors Git, avec ACL Windows limitées au SID courant ou permissions Unix 0700, et supprimés à la fin. Le disque de travail doit être privé et chiffré, par exemple BitLocker. Le tmpfs de restauration Docker doit disposer d'assez de mémoire. Une suppression n'est pas un effacement physique garanti sur SSD ; sur un runner éphémère, sa destruction complète est la dernière protection.
+
+Un reçu privé est écrit dans `%LOCALAPPDATA%\SHENA\backups`. Il contient empreinte, identifiants Drive et résultats, jamais jeton, mot de passe ou clé en clair. Ne pas le commettre. Pour reprendre une restauration à partir de la copie Drive existante, sans nouveau dump ni accès Production :
 
 ```powershell
 .\scripts\backup\Backup-SHENA.ps1 -RestoreReceipt CHEMIN_DU_RECU.json -RestoreImage IMAGE_VERIFIEE
 ```
 
-Le reçu est hors Git, normalement dans `%LOCALAPPDATA%\SHENA\backups`. Il contient bucket, version, empreinte, ARN KMS et résultats, jamais le jeton, un mot de passe ou une clé en clair. Conserver aussi ce reçu dans votre dossier opérateur privé. Les archives et leurs versions sont dans S3, pas dans les artefacts d'un dépôt public. Garder la clé KMS active, accessible au rôle de restauration et protégée contre sa suppression.
+La même clé doit être accessible depuis le coffre séparé de la machine de restauration. Sur Linux/macOS, installer les dépendances dans un venv privé et utiliser `python scripts/backup/shena_backup.py` avec les mêmes options en kebab-case.
 
-Sur Linux/macOS ou un runner de confiance avec Python 3.12+, Docker et accès directs autorisés : installer les dépendances dans un venv privé puis lancer `python scripts/backup/shena_backup.py` avec les mêmes options en kebab-case (`--provision-destination`, `--aws-profile`, etc.). Aucun secret ne doit être fourni comme option. Le script ne réutilise pas un mot de passe de base intégré à une URL.
+## GitHub Actions, sans archive ni secret publié
 
-## Accès indispensables à accorder une seule fois
+Le workflow `.github/workflows/production-backup-drive.yml` est préparé pour un runner Ubuntu standard. Dans un dépôt public, il utilise les capacités gratuites standard de GitHub Actions ; aucun runner payant ou élargissement de quota n'est demandé. Le job vérifie que ses accès privés sont présents **avant toute requête Production**. Il teste lui-même la connectivité Supabase via le code commun et s'arrête si elle manque. Aucun artefact de backup, dump ou reçu n'est envoyé à GitHub ; uniquement l'archive chiffrée est envoyée au dossier Drive privé.
 
-- **Exécuteur** : votre Windows ou un runner de confiance, Python 3.12+, Docker et trafic sortant autorisé vers les hôtes officiels Supabase en 5432, APIs Supabase/AWS et registres d'images en HTTPS. Aucun contournement de la politique Codex n'est nécessaire. Sur un runner, utiliser son gestionnaire de secrets approuvé.
-- **Supabase** : le jeton opérateur du projet SHENA, avec lecture des métadonnées/pooler, création de l'accès temporaire approuvé et lecture des clés serveur si des buckets privés existent. Le jeton existant est déjà configuré dans Codex ; votre ordinateur doit y accéder par saisie masquée ou votre gestionnaire sécurisé, sans l'inscrire dans GitHub.
-- **AWS** : un compte et une identité autorisés. Pour des ressources existantes : `sts:GetCallerIdentity`, lecture des réglages du bucket, `s3:ListBucket`, `s3:PutObject`, `s3:GetObject`, `s3:GetObjectVersion` sur le préfixe `shena-production/*`, et `kms:DescribeKey`, `kms:GenerateDataKey`, `kms:Decrypt` pour la seule clé choisie. Limiter l'usage KMS au contexte `project_ref=xxadpoebcslutlevzdsy`. L'application SHENA n'a besoin d'aucun de ces droits.
-- **Provisionnement optionnel** : autorisation de créer la stack CloudFormation `shena-private-backups`, son bucket/politique/versioning/chiffrement/blocage public et sa clé/politique/rotation KMS. Le provisionnement n'est pas exécuté depuis ce chat. À défaut, fournir des ressources déjà autorisées avec les deux options non secrètes ; ne pas accorder des droits administrateur globaux au runner de sauvegarde.
+Depuis votre ordinateur, si votre GitHub CLI est déjà authentifié avec le droit d'écrire les secrets du dépôt, une seule commande autorise Google et configure le runner :
 
-## Ce qui ouvre réellement la suite
+```powershell
+.\scripts\backup\Backup-SHENA.ps1 -AuthorizeDrive -ConfigureGitHub
+```
 
-Un code de sortie nul confirme les vérifications décrites, **pas une autorisation automatique de migration**. Le rapport garde `migration_gate_open=false` et `storage_service_restore_verified=false` : cette restauration des fichiers ne constitue pas un essai du service Supabase Storage avec ses JWT/RLS. Les attributs/appartenances des rôles système, secrets externes/Vault, intégrations et tests des migrations sur la copie restent à examiner. Si du contenu Vault nécessite une clé fournisseur absente, les lignes SQL restaurées seules ne prouvent pas que les secrets sont récupérables.
+Le programme transmet par **stdin** à `gh secret set` les trois valeurs `SHENA_RCLONE_CONFIG_B64`, `SHENA_BACKUP_MASTER_KEY` et `SUPABASE_ACCESS_TOKEN`. Ce sont des secrets chiffrés du coffre GitHub Actions, pas des fichiers Git, des logs ni des artefacts publics. La clé est donc dans un coffre distinct de Drive. Rien n'est copié manuellement dans une variable ou un YAML. Le programme n'ouvre pas une nouvelle connexion GitHub ou ne contourne pas un refus de permission.
 
-Transmettre seulement le reçu sans secrets pour reprendre la mission dans Codex, ou accorder l'accès sécurisé à l'archive et à KMS à l'exécuteur de restauration. Je vérifierai les preuves et compléterai les tests du service Storage et des migrations sur la copie isolée avant toute écriture Production. Les autorisations SQL existantes restent acquises pour les fichiers identiques ; toute modification de script sera soumise à revue. L'ordre reste : ACL products → Admin/deux fondateurs → commandes désactivées → tests → activation seulement avec zones/frais approuvés. Aucun paiement automatique ni téléchargement payant n'est activé par ces outils.
+Après cette configuration, il crée un commit **vide**, sans fichier ni secret, sur la branche existante `feat/shena-production-activation`, portant le marqueur `[shena-backup-run]`. Cela déclenche le workflow avant toute fusion dans main. La mise à jour est fast-forward uniquement, jamais forcée ; un changement concurrent de branche provoque un échec sûr. Les pushes ordinaires, forks et PR ne déclenchent aucune sauvegarde Production. Après une fusion ultérieure autorisée, le bouton `workflow_dispatch` sera également disponible sur la branche par défaut. Aucun planning n'est activé à votre insu.
+
+L'intégration GitHub actuellement accessible depuis Codex a refusé la gestion des secrets (`403`) ; le workflow n'est donc **pas présenté comme activé**. La commande sur votre ordinateur réutilise votre autorisation GitHub locale existante si elle possède les droits nécessaires. Si elle est absente ou refusée, aucun secret n'est exposé et aucune sauvegarde distante n'est déclenchée ; le flux local Drive reste utilisable. Les jetons Google peuvent être révoqués par Google ou par le propriétaire ; seule une révocation/expiration du renouvellement impose une nouvelle autorisation Google.
+
+## Limite de validation avant les migrations
+
+Aucun outil de cette procédure n'exécute une migration, ne fusionne une PR, ne publie Vercel et n'active une commande, un paiement ou un téléchargement. Le rapport conserve `migration_gate_open=false` et distingue `database_restore_verified`, `storage_bytes_restore_verified` et `storage_service_restore_verified` (ce dernier reste faux tant que le service Supabase Storage isolé et ses JWT/RLS ne sont pas réellement testés). Les clés externes/Vault et les appartenances système exigent aussi examen. Un reçu ou une CI sur données synthétiques ne prouve pas une restauration Production.
+
+L'autorisation Google n'a pas encore été accordée dans cette session : aucun transfert réel vers votre Drive ni sauvegarde Production n'est certifié. Après une exécution réelle, les preuves seront examinées et les tests du service isolé complétés avant de reprendre les migrations déjà autorisées, avec empreintes inchangées. Une modification de script SQL exigera la revue supplémentaire déjà prévue.

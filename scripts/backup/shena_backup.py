@@ -16,9 +16,9 @@ import urllib.parse
 import urllib.request
 import uuid
 from datetime import datetime, timezone
-import boto3
 import psycopg
 from psycopg import sql
+from drive import LocalVault, DriveStore, ensure_rclone, load_config, save_config, authorize, configure_github, secret_get, secret_set
 from core import REF, REPO, CHUNK, checked, digest, private_directory, encrypt_file, decrypt_file, extract_verified, restore_database, catalog_query, table_hash_query
 
 API = 'https://api.supabase.com/v1/projects/' + REF
@@ -41,36 +41,6 @@ def request(url, headers=None, body=None):
 def api(token, suffix='', body=None):
     with request(API + suffix, {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'}, body) as stream:
         return json.load(stream)
-
-
-def destination(session, bucket, key, provision):
-    account = session.client('sts').get_caller_identity()['Account']
-    if provision:
-        if bucket or key: raise ValueError('Choisir ressources existantes OU provisionnement, pas les deux')
-        cf = session.client('cloudformation'); name = 'shena-private-backups'
-        try: stacks = cf.describe_stacks(StackName=name)['Stacks']
-        except cf.exceptions.ClientError as e:
-            if 'does not exist' not in e.response.get('Error', {}).get('Message', ''): raise
-            cf.create_stack(StackName=name, TemplateBody=Path(__file__).with_name('destination.json').read_text(),
-                            Tags=[{'Key': 'Application', 'Value': 'SHENA'}])
-            cf.get_waiter('stack_create_complete').wait(StackName=name)
-            stacks = cf.describe_stacks(StackName=name)['Stacks']
-        outputs = {r['OutputKey']: r['OutputValue'] for r in stacks[0]['Outputs']}
-        bucket, key = outputs['Bucket'], outputs['KmsKey']
-    if not bucket or not key: raise ValueError('S3 privé et clé KMS requis, ou --provision-destination explicitement autorisé')
-    s3 = session.client('s3'); kms = session.client('kms')
-    s3.head_bucket(Bucket=bucket, ExpectedBucketOwner=account)
-    block = s3.get_public_access_block(Bucket=bucket, ExpectedBucketOwner=account)['PublicAccessBlockConfiguration']
-    required = {'BlockPublicAcls','IgnorePublicAcls','BlockPublicPolicy','RestrictPublicBuckets'}
-    if not all(block.get(k) is True for k in required): raise RuntimeError('Protection accès public S3 insuffisante')
-    if s3.get_bucket_versioning(Bucket=bucket, ExpectedBucketOwner=account).get('Status') != 'Enabled':
-        raise RuntimeError('Versioning S3 requis')
-    meta = kms.describe_key(KeyId=key)['KeyMetadata']
-    if meta.get('KeyState') != 'Enabled' or meta.get('KeyUsage') != 'ENCRYPT_DECRYPT' or meta.get('KeySpec') != 'SYMMETRIC_DEFAULT':
-        raise RuntimeError('Clé KMS symétrique active requise')
-    key = meta['Arn']
-    if key.split(':')[4] != account: raise RuntimeError('Clé KMS hors du compte autorisé')
-    return s3, kms, bucket, key, account
 
 
 def source_endpoints(project, poolers):
@@ -235,24 +205,10 @@ def capture(token, project, work):
     finally: conn.close()
 
 
-def upload_verified(s3,bucket,account,key,path):
-    with open(path,'rb') as stream:
-        result=s3.put_object(Bucket=bucket,Key=key,Body=stream,ExpectedBucketOwner=account,ServerSideEncryption='AES256',ContentType='application/octet-stream',IfNoneMatch='*')
-    version=result.get('VersionId')
-    if not version or version=='null': raise RuntimeError('Version S3 non créée')
-    response=s3.get_object(Bucket=bucket,Key=key,VersionId=version,ExpectedBucketOwner=account)
-    h=hashlib.sha256()
-    with response['Body'] as stream:
-        for chunk in iter(lambda:stream.read(CHUNK),b''):h.update(chunk)
-    if h.hexdigest()!=digest(path):raise RuntimeError('Copie durable différente après relecture')
-    return version
-
-
-def restore_receipt(a, session, root, receipt):
+def restore_receipt(a, store, vault, root, receipt):
     if receipt.get('project_ref')!=REF or not re.fullmatch('[a-f0-9]{32}',receipt.get('backup_id','')):
         raise ValueError('Reçu de sauvegarde SHENA attendu')
-    s3,kms,bucket,key_id,account=destination(session,receipt['bucket'],receipt['key_id'],False)
-    if account!=receipt['account']:raise RuntimeError('Compte de sauvegarde inattendu')
+    if receipt.get('provider')!='google-drive' or receipt.get('key_id')!=vault.key_id:raise RuntimeError('Destination ou coffre inattendu')
     receipt['storage_service_restore_verified']=False
     receipt['restoration_last_attempt_at']=datetime.now(timezone.utc).isoformat()
     receipt['database_restore_verified']=False
@@ -260,10 +216,10 @@ def restore_receipt(a, session, root, receipt):
     receipt['migration_gate_open']=False
     with tempfile.TemporaryDirectory(prefix='restore-',dir=root) as folder:
         restore=private_directory(folder); downloaded=restore/'remote.shena'
-        response=s3.get_object(Bucket=bucket,Key=receipt['object_key'],VersionId=receipt['version_id'],ExpectedBucketOwner=account)
-        with response['Body'] as stream,open(downloaded,'xb') as out:shutil.copyfileobj(stream,out,CHUNK)
+        store.download(receipt,downloaded)
         if digest(downloaded)!=receipt['archive_sha256']:raise RuntimeError('Archive distante altérée')
-        plain=restore/'archive.tar.gz';decrypt_file(downloaded,plain,kms,key_id,receipt['backup_id'])
+        receipt['durable_copy_readback_verified']=True
+        plain=restore/'archive.tar.gz';decrypt_file(downloaded,plain,vault,vault.key_id,receipt['backup_id'])
         files=restore/'files';files.mkdir();manifest=extract_verified(plain,files)
         if manifest.get('project_ref')!=REF:raise RuntimeError('Projet archive inattendu')
         expected=json.loads((files/'source-inventory.json').read_text())
@@ -285,34 +241,54 @@ def restore_receipt(a, session, root, receipt):
 def execute(a):
     os.umask(0o077)
     root=private_directory(a.output)
-    if a.restore_receipt:
-        receipt=json.loads(a.restore_receipt.read_text())
-        session=boto3.Session(profile_name=a.aws_profile,region_name=a.region)
-        try:restore_receipt(a,session,root,receipt)
-        finally:a.restore_receipt.write_text(json.dumps(receipt,indent=2)+'\n')
-        print('Restauration vérifiée selon le rapport ; aucune migration automatique.')
-        return
-    prepare_pg_tools()
+    binary=ensure_rclone(root.parent/'backup-tools/rclone')
+    with tempfile.TemporaryDirectory(prefix='access-',dir=root) as folder:
+        access=private_directory(folder);config=access/'rclone.conf'
+        if a.authorize_drive:
+            authorize(binary,config)
+        else:config.write_text(load_config())
+        try:
+            if a.configure_github:
+                token=operator_token()
+                configure_github(config,token)
+                return
+            store=DriveStore(binary,config);vault=LocalVault()
+            if a.restore_receipt:
+                receipt=json.loads(a.restore_receipt.read_text())
+                try:restore_receipt(a,store,vault,root,receipt)
+                finally:a.restore_receipt.write_text(json.dumps(receipt,indent=2)+'\n')
+                print('Restauration vérifiée selon le rapport ; aucune migration automatique.')
+                return
+            prepare_pg_tools()
+            token=operator_token();project=api(token)
+            if project.get('id')!=REF or project.get('status')!='ACTIVE_HEALTHY':raise RuntimeError('Projet Production non identifié ou non sain')
+            if a.test_connections:
+                with tempfile.TemporaryDirectory(prefix='probe-',dir=root) as work:
+                    conn,env,mode=connect_source(token,project,private_directory(work));conn.close()
+                print('Connexion officielle et rôle lecture seule vérifiés.')
+                return
+            run_backup(a,root,store,vault,token,project)
+        finally:
+            # Préserver le renouvellement OAuth dans le coffre, jamais dans un artefact.
+            if config.exists() and not os.environ.get('SHENA_RCLONE_CONFIG_B64'):save_config(config.read_text())
+
+
+def operator_token():
     token=os.environ.get('SUPABASE_ACCESS_TOKEN')
+    if not token and not os.environ.get('CI'):token=secret_get('supabase-operator')
     if not token:
-        if not sys.stdin.isatty():raise RuntimeError('Un runner non interactif doit recevoir le jeton depuis son gestionnaire sécurisé')
-        token=getpass.getpass('Jeton Supabase opérateur (masqué) : ')
+        if not sys.stdin.isatty():raise RuntimeError('Jeton Supabase requis dans le coffre de secrets du runner')
+        token=getpass.getpass('Jeton Supabase opérateur (masqué, conservé au coffre OS) : ')
+        if token:secret_set('supabase-operator',token)
     if not token:raise RuntimeError('Jeton opérateur requis')
-    project=api(token)
-    if project.get('id')!=REF or project.get('status')!='ACTIVE_HEALTHY':raise RuntimeError('Projet Production non identifié ou non sain')
-    if a.test_connections:
-        with tempfile.TemporaryDirectory(prefix='probe-',dir=root) as folder:
-            conn,env,mode=connect_source(token,project,private_directory(folder))
-            conn.close()
-        print('Connexion officielle TLS vérifiée : '+mode+' ; rôle lecture seule vérifié. Aucun dump ni migration.')
-        return
-    session=boto3.Session(profile_name=a.aws_profile,region_name=a.region)
-    s3,kms,bucket,key_id,account=destination(session,a.bucket,a.kms_key,a.provision_destination)
+    return token
+
+
+def run_backup(a,root,store,vault,token,project):
     backup_id=uuid.uuid4().hex
-    context={'project_ref':REF,'backup_id':backup_id}
-    data_key=kms.generate_data_key(KeyId=key_id,KeySpec='AES_256',EncryptionContext=context)
-    receipt={'project_ref':REF,'backup_id':backup_id,'created_at':datetime.now(timezone.utc).isoformat(),
-             'bucket':bucket,'account':account,'key_id':key_id,'database_restore_verified':False,
+    key,wrapped=vault.new_data_key(backup_id)
+    receipt={'project_ref':REF,'backup_id':backup_id,'provider':'google-drive','created_at':datetime.now(timezone.utc).isoformat(),
+             'key_id':vault.key_id,'database_restore_verified':False,
              'storage_bytes_restore_verified':False,'storage_service_restore_verified':False,
              'migration_gate_open':False,'production_migrations_executed':False}
     source_version=project['database'].get('version','')
@@ -320,10 +296,8 @@ def execute(a):
     receipt_file=root/(backup_id+'-receipt.json')
     try:
         with tempfile.TemporaryDirectory(prefix='plaintext-',dir=root) as folder:
-            work=private_directory(folder)
-            manifest=capture(token,project,work)
-            archive=root/(backup_id+'.tar.gz')
-            archive_created=False
+            work=private_directory(folder);capture(token,project,work)
+            archive=root/(backup_id+'.tar.gz');archive_created=False
             try:
                 with open(archive,'xb') as raw:
                     archive_created=True
@@ -331,26 +305,27 @@ def execute(a):
                         for p in sorted(work.rglob('*')):
                             if p.is_file():tar.add(p,arcname=p.relative_to(work).as_posix(),recursive=False)
                 encrypted=root/(backup_id+'.shena')
-                encrypt_file(archive,encrypted,data_key['Plaintext'],data_key['CiphertextBlob'],key_id,backup_id)
-                del data_key['Plaintext']
+                encrypt_file(archive,encrypted,key,wrapped,vault.key_id,backup_id)
+                del key
             finally:
                 if archive_created:archive.unlink(missing_ok=True)
-        object_key='shena-production/'+backup_id+'/backup.shena'
-        version=upload_verified(s3,bucket,account,object_key,encrypted)
-        receipt.update(object_key=object_key,version_id=version,archive_sha256=digest(encrypted),durable_copy_readback_verified=True)
-        restore_receipt(a,session,root,receipt)
+        receipt.update(store.upload(backup_id+'/backup.shena',encrypted))
+        receipt['archive_sha256']=digest(encrypted)
+        # Restauration depuis Drive ; altération de l'archive détectée avant déchiffrement.
+        restore_receipt(a,store,vault,root,receipt)
+        receipt['durable_copy_readback_verified']=True
     finally:
         receipt_file.write_text(json.dumps(receipt,indent=2)+'\n')
         print('Rapport privé : '+str(receipt_file))
-    print('Base et octets restaurés ; aucune migration autorisée automatiquement. Rapport à examiner.')
+    print('Base et octets restaurés ; aucune migration automatique. Rapport à examiner.')
 
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--aws-profile');parser.add_argument('--region',default='us-east-2')
+    parser.add_argument('--authorize-drive',action='store_true')
+    parser.add_argument('--configure-github',action='store_true')
     parser.add_argument('--test-connections',action='store_true')
     parser.add_argument('--restore-receipt',type=Path)
-    parser.add_argument('--bucket');parser.add_argument('--kms-key');parser.add_argument('--provision-destination',action='store_true')
     parser.add_argument('--restore-image',help='Image Supabase PostgreSQL compatible ; empreinte résolue et enregistrée')
     default=Path(os.environ.get('LOCALAPPDATA',Path.home()/'.local/state'))/'SHENA/backups'
     parser.add_argument('--output',type=Path,default=default)

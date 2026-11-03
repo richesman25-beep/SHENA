@@ -1,14 +1,11 @@
 ﻿# Windows PowerShell 5.1 / PowerShell 7. Aucun secret en argument ou dans Git.
 [CmdletBinding()]
 param(
-  [string]$AwsProfile,
-  [string]$Region = 'us-east-2',
-  [string]$Bucket,
-  [string]$KmsKey,
   [string]$RestoreImage,
   [string]$RestoreReceipt,
   [string]$OutputDirectory,
-  [switch]$ProvisionDestination,
+  [switch]$AuthorizeDrive,
+  [switch]$ConfigureGitHub,
   [switch]$TestConnections,
   [switch]$ShowHelp
 )
@@ -31,11 +28,12 @@ if ($LASTEXITCODE -ne 0) { throw 'Installation des dépendances impossible ; ne 
 # Réutiliser une installation PostgreSQL 17 existante sans installer de service.
 $pgBin = Join-Path $env:ProgramFiles 'PostgreSQL\17\bin'
 if (Test-Path $pgBin) { $env:PATH = "$pgBin;$env:PATH" }
-$arguments = @((Join-Path $PSScriptRoot 'shena_backup.py'), '--region', $Region)
-foreach ($pair in @(@('--aws-profile',$AwsProfile), @('--bucket',$Bucket), @('--kms-key',$KmsKey), @('--restore-image',$RestoreImage), @('--restore-receipt',$RestoreReceipt), @('--output',$OutputDirectory))) {
+$arguments = @((Join-Path $PSScriptRoot 'shena_backup.py'))
+foreach ($pair in @(@('--restore-image',$RestoreImage), @('--restore-receipt',$RestoreReceipt), @('--output',$OutputDirectory))) {
   if ($pair[1]) { $arguments += @($pair[0],$pair[1]) }
 }
-if ($ProvisionDestination) { $arguments += '--provision-destination' }
+if ($AuthorizeDrive) { $arguments += '--authorize-drive' }
+if ($ConfigureGitHub) { $arguments += '--configure-github' }
 if ($TestConnections) { $arguments += '--test-connections' }
 if ($ShowHelp) { $arguments += '--help' }
 & $python @arguments

@@ -1,4 +1,4 @@
-"""Fixtures seulement : aucun jeton Supabase, aucune source distante ni ressource AWS."""
+"""Fixtures seulement : aucun jeton Supabase, aucune source distante ni compte Google."""
 import importlib.util
 import io
 import json
@@ -14,25 +14,26 @@ from unittest.mock import patch
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'scripts/backup'))
 import core
+import drive
 import shena_backup as runner
 
-class FakeKms:
-    def decrypt(self,**kwargs):
-        assert kwargs['EncryptionContext']['project_ref']==core.REF
-        return {'Plaintext':b'x'*32}
+class FakeVault:
+    def unwrap(self,wrapped,context,key_id):
+        assert context['project_ref']==core.REF
+        return b'x'*32
 
 class BackupTests(unittest.TestCase):
     def test_envelope_roundtrip_tamper_and_context(self):
         with tempfile.TemporaryDirectory() as folder:
             d=Path(folder);src=d/'source';src.write_bytes(b'PRIVATE SYNTHETIC ONLY'*100000)
             enc=d/'archive';core.encrypt_file(src,enc,b'x'*32,b'wrapped','key','a'*32)
-            dst=d/'restored';core.decrypt_file(enc,dst,FakeKms(),'key','a'*32)
+            dst=d/'restored';core.decrypt_file(enc,dst,FakeVault(),'key','a'*32)
             self.assertEqual(src.read_bytes(),dst.read_bytes())
-            with self.assertRaises(ValueError):core.decrypt_file(enc,d/'wrong',FakeKms(),'key','b'*32)
+            with self.assertRaises(ValueError):core.decrypt_file(enc,d/'wrong',FakeVault(),'key','b'*32)
             data=bytearray(enc.read_bytes());data[-17]^=1;enc.write_bytes(data)
-            with self.assertRaises(Exception):core.decrypt_file(enc,d/'invalid',FakeKms(),'key','a'*32)
+            with self.assertRaises(Exception):core.decrypt_file(enc,d/'invalid',FakeVault(),'key','a'*32)
             self.assertFalse((d/'invalid').exists())
-            with self.assertRaises(Exception):core.decrypt_file(enc,dst,FakeKms(),'key','a'*32)
+            with self.assertRaises(Exception):core.decrypt_file(enc,dst,FakeVault(),'key','a'*32)
             self.assertEqual(src.read_bytes(),dst.read_bytes())
 
     def test_archive_rejects_traversal_links_duplicates_and_missing_files(self):
@@ -67,45 +68,61 @@ class BackupTests(unittest.TestCase):
             p=core.private_directory(Path(folder)/'private')
             if os.name!='nt':self.assertEqual(p.stat().st_mode&0o777,0o700)
 
-    def test_upload_readback_and_version_required(self):
-        class S3:
-            def put_object(self,**kw):return {'VersionId':'v1'}
-            def get_object(self,**kw):return {'Body':io.BytesIO(b'fixture')}
+    def test_free_vault_key_wrap_wrong_key_and_context(self):
+        import base64
+        with patch.dict(os.environ,{'SHENA_BACKUP_MASTER_KEY':base64.b64encode(b'x'*32).decode()}):
+            vault=drive.LocalVault();key,wrapped=vault.new_data_key('a'*32)
+            self.assertEqual(vault.unwrap(wrapped,{'project_ref':core.REF,'backup_id':'a'*32},vault.key_id),key)
+            with self.assertRaises(Exception):vault.unwrap(wrapped,{'project_ref':core.REF,'backup_id':'b'*32},vault.key_id)
+            with self.assertRaises(ValueError):vault.unwrap(wrapped,{'project_ref':core.REF},'other-vault')
+
+    def test_drive_rejects_public_shared_or_foreign_folder(self):
+        private={'ownedByMe':True,'trashed':False}
+        drive.owner_only(private,[{'type':'user','role':'owner'}])
+        for perms in [[],[{'type':'anyone','role':'reader'}],[{'type':'group','role':'writer'}],[{'type':'user','role':'owner'},{'type':'user','role':'reader'}]]:
+            with self.assertRaises(RuntimeError):drive.owner_only(private,perms)
+        with self.assertRaises(RuntimeError):drive.owner_only({'ownedByMe':False},[{'type':'user','role':'owner'}])
+        with self.assertRaises(RuntimeError):drive.owner_only(dict(private,driveId='shared-team'),[{'type':'user','role':'owner'}])
+
+    def test_vault_refuses_plaintext_backend(self):
+        class Plain:pass
+        with patch.object(drive.keyring,'get_keyring',return_value=Plain()):
+            with self.assertRaises(RuntimeError):drive.secret_get('fixture')
+
+    def test_no_secrets_in_rclone_args_or_child_environment(self):
+        with patch.dict(os.environ,{'SUPABASE_ACCESS_TOKEN':'SYNTHETIC','SHENA_BACKUP_MASTER_KEY':'SYNTHETIC','SHENA_RCLONE_CONFIG_B64':'SYNTHETIC'}):
+            with patch.object(drive.subprocess,'run',return_value=__import__('types').SimpleNamespace(returncode=0,stdout=b'{}')) as run:
+                transport=drive.RcloneTransfer('rclone','shena-drive:',Path('/private/rclone.conf'))
+                transport.call('lsjson','shena-drive:')
+                self.assertNotIn('SYNTHETIC',str(run.call_args.args))
+                for key in ('SUPABASE_ACCESS_TOKEN','SHENA_BACKUP_MASTER_KEY','SHENA_RCLONE_CONFIG_B64'):self.assertNotIn(key,run.call_args.kwargs['env'])
+
+    def test_backup_workflow_never_publishes_or_runs_on_regular_push(self):
+        text=(ROOT/'.github/workflows/production-backup-drive.yml').read_text()
+        self.assertNotIn('uses: actions/upload-artifact',text)
+        self.assertIn('[shena-backup-run]',text)
+        self.assertIn('contents: read',text)
+        self.assertNotIn('secrets: write',text)
+
+    @unittest.skipUnless(os.environ.get('SHENA_BACKUP_RCLONE_TESTS')=='1','Transfert rclone réel activé en CI')
+    def test_real_rclone_transfer_readback_restore_and_no_overwrite(self):
         with tempfile.TemporaryDirectory() as folder:
-            p=Path(folder)/'ciphertext';p.write_bytes(b'fixture')
-            self.assertEqual(runner.upload_verified(S3(),'bucket','account','key',p),'v1')
-            p.write_bytes(b'TAMPER')
-            with self.assertRaises(RuntimeError):runner.upload_verified(S3(),'bucket','account','key',p)
-            with patch.object(S3,'put_object',return_value={}):
-                with self.assertRaises(RuntimeError):runner.upload_verified(S3(),'bucket','account','key',p)
-
-    def test_destination_rejects_public_unversioned_or_wrong_key(self):
-        class Client:
-            block=True;version='Enabled';key_account='123456789012'
-            def get_caller_identity(self):return {'Account':'123456789012'}
-            def head_bucket(self,**kw):pass
-            def get_public_access_block(self,**kw):return {'PublicAccessBlockConfiguration':dict.fromkeys(('BlockPublicAcls','IgnorePublicAcls','BlockPublicPolicy','RestrictPublicBuckets'),self.block)}
-            def get_bucket_versioning(self,**kw):return {'Status':self.version}
-            def describe_key(self,**kw):return {'KeyMetadata':{'Arn':'arn:aws:kms:us-east-2:'+self.key_account+':key/fixture','KeyState':'Enabled','KeyUsage':'ENCRYPT_DECRYPT','KeySpec':'SYMMETRIC_DEFAULT'}}
-        class Session:
-            def __init__(self):self.instance=Client()
-            def client(self,name):return self.instance
-        session=Session()
-        runner.destination(session,'bucket','key',False)
-        for attr,value in [('block',False),('version','Suspended'),('key_account','999999999999')]:
-            with self.subTest(attr=attr):
-                previous=getattr(session.instance,attr);setattr(session.instance,attr,value)
-                with self.assertRaises(RuntimeError):runner.destination(session,'bucket','key',False)
-                setattr(session.instance,attr,previous)
-
-    def test_destination_template_never_public_or_deletes_archives(self):
-        template=json.loads((ROOT/'scripts/backup/destination.json').read_text())
-        bucket=template['Resources']['Archive']
-        self.assertEqual(bucket['DeletionPolicy'],'Retain')
-        self.assertEqual(bucket['Properties']['VersioningConfiguration']['Status'],'Enabled')
-        self.assertTrue(all(bucket['Properties']['PublicAccessBlockConfiguration'].values()))
-        self.assertNotIn('LifecycleConfiguration',bucket['Properties'])
-        self.assertEqual(template['Resources']['EnvelopeKey']['DeletionPolicy'],'Retain')
+            d=Path(folder);binary=drive.ensure_rclone(d/'tools')
+            remote=d/'remote-private';remote.mkdir()
+            transfer=drive.RcloneTransfer(binary,str(remote))
+            with patch.dict(os.environ,{'SHENA_BACKUP_MASTER_KEY':__import__('base64').b64encode(b'x'*32).decode()}):vault=drive.LocalVault()
+            original=d/'original';original.write_bytes(b'PRIVATE SYNTHETIC ONLY'*10000)
+            key,wrapped=vault.new_data_key('a'*32)
+            enc=d/'backup.shena';core.encrypt_file(original,enc,key,wrapped,vault.key_id,'a'*32)
+            transfer.upload('a'*32+'/backup.shena',enc)
+            with self.assertRaises(RuntimeError):transfer.upload('a'*32+'/backup.shena',enc)
+            downloaded=d/'downloaded';transfer.download('a'*32+'/backup.shena',downloaded)
+            self.assertEqual(core.digest(enc),core.digest(downloaded))
+            restored=d/'restored';core.decrypt_file(downloaded,restored,vault,vault.key_id,'a'*32)
+            self.assertEqual(original.read_bytes(),restored.read_bytes())
+            # Un autre contenu distant ne doit pas pouvoir être déchiffré.
+            data=bytearray(downloaded.read_bytes());data[-17]^=1;downloaded.write_bytes(data)
+            with self.assertRaises(Exception):core.decrypt_file(downloaded,d/'invalid',vault,vault.key_id,'a'*32)
 
     def test_no_production_migration_or_automatic_attestation(self):
         source=(ROOT/'scripts/backup/shena_backup.py').read_text()
@@ -122,7 +139,7 @@ class BackupTests(unittest.TestCase):
             core.checked(['docker','run','-d','--name',name,'--network','none','-e','POSTGRES_HOST_AUTH_METHOD=trust',image])
             import time
             for _ in range(60):
-                r=subprocess.run(['docker','exec',name,'pg_isready','-U','postgres'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+                r=subprocess.run(['docker','exec',name,'pg_isready','-h','127.0.0.1','-U','postgres'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
                 if not r.returncode:break
                 time.sleep(.5)
             def psql(q):return core.checked(['docker','exec','-i',name,'psql','-X','-U','postgres','-Atq','-v','ON_ERROR_STOP=1'],input=("SET search_path=pg_catalog;SET TIME ZONE 'UTC';"+q).encode()).decode()
@@ -152,7 +169,37 @@ class BackupTests(unittest.TestCase):
                 finally:
                     export.communicate('ROLLBACK;\n',timeout=10)
                 self.assertEqual(psql('SELECT count(*) FROM public.fixture').strip(),'2')
-                proof=core.restore_database(d,image,expected,'')
+                # Bundle réel PostgreSQL + octets Storage, chiffré et transféré
+                # par rclone (backend local), puis restauré depuis la copie distante.
+                import hashlib,base64,types
+                source=d/'bundle';source.mkdir();(source/'objects').mkdir()
+                __import__('shutil').copyfile(d/'database.dump',source/'database.dump')
+                (source/'objects/00000000.bin').write_bytes(b'%PDF-1.7\nSYNTHETIC STORAGE ONLY')
+                obj={'bucket_id':'digital-products','object_path':'fixture.pdf','file':'objects/00000000.bin','sha256':core.digest(source/'objects/00000000.bin')}
+                (source/'source-inventory.json').write_text(json.dumps(expected))
+                (source/'storage-files.json').write_text(json.dumps([obj]))
+                (source/'storage-inventory.json').write_text(json.dumps({'objects':[{'bucket_id':'digital-products','name':'fixture.pdf'}]}))
+                manifest={'project_ref':core.REF,'preloads':'','files':{p.relative_to(source).as_posix():core.digest(p) for p in source.rglob('*') if p.is_file()}}
+                (source/'manifest.json').write_text(json.dumps(manifest))
+                archive=d/'bundle.tar.gz'
+                with tarfile.open(archive,'w:gz') as tar:
+                    for p in source.rglob('*'):
+                        if p.is_file():tar.add(p,arcname=p.relative_to(source).as_posix(),recursive=False)
+                with patch.dict(os.environ,{'SHENA_BACKUP_MASTER_KEY':base64.b64encode(b'x'*32).decode()}):vault=drive.LocalVault()
+                key,wrapped=vault.new_data_key('a'*32);encrypted=d/'bundle.shena'
+                core.encrypt_file(archive,encrypted,key,wrapped,vault.key_id,'a'*32)
+                transfer=drive.RcloneTransfer(drive.ensure_rclone(d/'tools'),str(d/'remote'))
+                transfer.upload('a'*32+'/backup.shena',encrypted)
+                class Store:
+                    def download(self,receipt,target):transfer.download(receipt['object_key'],target)
+                receipt={'provider':'google-drive','project_ref':core.REF,'backup_id':'a'*32,'key_id':vault.key_id,'archive_sha256':core.digest(encrypted),'object_key':'a'*32+'/backup.shena'}
+                runner.restore_receipt(types.SimpleNamespace(restore_image=image),Store(),vault,d,receipt)
+                self.assertTrue(receipt['database_restore_verified'])
+                self.assertTrue(receipt['storage_bytes_restore_verified'])
+                self.assertFalse(receipt['storage_service_restore_verified'])
+                self.assertFalse(receipt['migration_gate_open'])
+                proof=receipt
+
                 self.assertTrue(proof['database_restore_verified'])
                 expected['tables'][0]['rows']=2
                 with self.assertRaises(RuntimeError):core.restore_database(d,image,expected,'')
