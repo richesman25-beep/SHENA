@@ -147,6 +147,22 @@ def restore_database(root, image, expected, preloads):
         for role in expected['roles']:
             if role not in existing:
                 psql('CREATE ROLE ' + sql_ident(role) + ' NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;')
+        # Adaptation explicite des rôles fournisseur dans CE conteneur sans réseau.
+        # Les event triggers Supabase appartiennent à supabase_admin : PostgreSQL
+        # exige que leur propriétaire soit superuser, même pendant la restauration.
+        allowed_bypass = {'postgres','supabase_admin','service_role','supabase_auth_admin','supabase_storage_admin','supabase_read_only_user'}
+        adapted = []
+        for role, superuser, bypass in expected.get('role_attributes', []):
+            if superuser and role not in {'postgres','supabase_admin'}:
+                raise RuntimeError('Rôle superuser non examiné dans la source : arrêt isolé')
+            if bypass and role not in allowed_bypass:
+                raise RuntimeError('Rôle BYPASSRLS non examiné dans la source : arrêt isolé')
+            if role == 'supabase_admin' and superuser:
+                psql('ALTER ROLE supabase_admin SUPERUSER NOLOGIN;')
+                adapted.append('supabase_admin:SUPERUSER:NOLOGIN')
+            if role != 'postgres' and bypass:
+                psql('ALTER ROLE '+sql_ident(role)+' BYPASSRLS NOLOGIN;')
+                adapted.append(role+':BYPASSRLS:NOLOGIN')
         with (root / 'database.dump').open('rb') as inp:
             checked(['docker', 'exec', '-i', name, 'pg_restore', '-h', '/tmp', '-U', 'postgres', '--exit-on-error', '--single-transaction', '--dbname=postgres'], stdin=inp)
         for table in expected['tables']:
@@ -160,7 +176,7 @@ def restore_database(root, image, expected, preloads):
         catalog = json.loads(psql(catalog_query()))
         if catalog != expected['catalog']: raise RuntimeError('Contraintes/ACL/RLS/fonctions restaurées différentes')
         return {'database_restore_verified': True, 'restore_image': pinned,
-                'tables_verified': len(expected['tables']), 'system_role_attributes_replayed': False}
+                'tables_verified': len(expected['tables']), 'system_role_attributes_replayed': False, 'isolated_platform_role_adapter': adapted}
     finally:
         if started:
             subprocess.run(['docker', 'rm', '-f', '-v', name], check=True, stdout=subprocess.DEVNULL)

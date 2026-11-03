@@ -116,7 +116,8 @@ def pg_call(program, args, env, stdout=None):
                 mapped.append('--file=/work/'+Path(arg[7:]).resolve().relative_to(work).as_posix())
             elif Path(arg).is_absolute():mapped.append('/work/'+Path(arg).resolve().relative_to(work).as_posix())
             else:mapped.append(arg)
-        command=['docker','run','--rm','--mount','type=bind,src='+str(work)+',dst=/work']
+        command=['docker','run','--rm','--mount','type=bind,src='+str(work)+',dst=/work','-e','HOME=/tmp']
+        if os.name!='nt':command+=['--user',str(os.getuid())+':'+str(os.getgid())]
         for key in ('PGHOST','PGPORT','PGUSER','PGDATABASE','PGSSLMODE','PGSSLROOTCERT','PGCONNECT_TIMEOUT','PGOPTIONS'):
             command+=['-e',key]
         command+=['--entrypoint','/bin/sh',CLIENT_IMAGE,'-c',
@@ -185,6 +186,7 @@ def capture(token, project, work):
         toc = pg_call('pg_restore', ['--list',str(work/'database.dump')], env)
         (work/'database-toc.txt').write_bytes(toc)
         expected = {'roles':[x[0] for x in conn.execute('SELECT rolname FROM pg_roles ORDER BY rolname')],
+                    'role_attributes':[list(x) for x in conn.execute('SELECT rolname,rolsuper,rolbypassrls FROM pg_roles ORDER BY rolname')],
                     'catalog':conn.execute(catalog_query()).fetchone()[0], 'tables':[]}
         # catalog_query retourne du texte JSON, pas un objet selon l'adaptation.
         if isinstance(expected['catalog'],str): expected['catalog']=json.loads(expected['catalog'])
