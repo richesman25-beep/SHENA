@@ -49,3 +49,7 @@ Aucune destination durable ni identité d'accès correspondante n'est actuelleme
 - Stockage durable relu et déchiffré depuis une machine isolée, avec clé récupérée séparément ; tous les objets Storage rapprochés de leur inventaire.
 - Restauration réelle de la base et du service Storage compatible réussie, incluant les refus d'accès anon/client et les accès des deux comptes administrateurs sur la copie. Aucune restauration par écrasement de Production.
 - Manifeste et preuves examinés ; seulement ensuite, accord nominatif du propriétaire sur l'empreinte SHA256 de chaque script persistant. Une CI verte seule ne constitue pas cette validation.
+
+## Exécuteur Windows automatisé
+
+Les outils exécutables et la procédure sont désormais dans [SAUVEGARDE-WINDOWS.md](../../SAUVEGARDE-WINDOWS.md) et `scripts/backup/`. Ils ne relancent aucun diagnostic réseau Codex. Le provisionnement S3/KMS est optionnel et explicite ; aucune destination, clé ou sauvegarde Production n’a été créée pendant leur développement.

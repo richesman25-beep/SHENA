@@ -16,3 +16,10 @@ __pycache__/
 .vercel/
 
 .shena-backups/
+
+# Sauvegardes et clés locales : toujours hors dépôt ; défense supplémentaire.
+*.shena
+*.dump
+*.pgpass
+*-receipt.json
+pgpass
