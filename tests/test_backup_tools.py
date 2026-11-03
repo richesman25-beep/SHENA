@@ -97,6 +97,13 @@ class BackupTests(unittest.TestCase):
                 self.assertNotIn('SYNTHETIC',str(run.call_args.args))
                 for key in ('SUPABASE_ACCESS_TOKEN','SHENA_BACKUP_MASTER_KEY','SHENA_RCLONE_CONFIG_B64'):self.assertNotIn(key,run.call_args.kwargs['env'])
 
+    def test_google_authorization_child_receives_no_supabase_or_encryption_key(self):
+        import types,contextlib
+        with patch.dict(os.environ,{'SUPABASE_ACCESS_TOKEN':'SYNTHETIC','SHENA_BACKUP_MASTER_KEY':'SYNTHETIC','SHENA_RCLONE_CONFIG_B64':'SYNTHETIC'}),patch.object(drive.sys.stdin,'isatty',return_value=True),patch.object(drive,'LocalVault'),patch.object(drive,'secret_get',return_value=None),patch.object(drive.subprocess,'run',return_value=types.SimpleNamespace(returncode=1)) as run,contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaises(RuntimeError):drive.authorize('rclone',Path('/unused/private.conf'))
+            self.assertNotIn('SYNTHETIC',str(run.call_args.args))
+            for name in ('SUPABASE_ACCESS_TOKEN','SHENA_BACKUP_MASTER_KEY','SHENA_RCLONE_CONFIG_B64'):self.assertNotIn(name,run.call_args.kwargs['env'])
+
     def test_github_setup_never_overwrites_existing_key(self):
         import types
         with patch.object(drive.shutil,'which',return_value='gh'),patch.object(drive.subprocess,'run',return_value=types.SimpleNamespace(returncode=0,stdout=b'[{"name":"SHENA_BACKUP_MASTER_KEY"}]')) as run:

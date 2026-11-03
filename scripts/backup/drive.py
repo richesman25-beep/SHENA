@@ -121,15 +121,19 @@ def ensure_rclone(directory):
     return str(binary)
 
 
+def rclone_environment():
+    env=os.environ.copy()
+    for name in ('SUPABASE_ACCESS_TOKEN','SHENA_BACKUP_MASTER_KEY','SHENA_RCLONE_CONFIG_B64'):env.pop(name,None)
+    return env
+
+
 class RcloneTransfer:
     """Transport commun également testé contre le backend local réel de rclone."""
     def __init__(self,binary,root,config=None):
         self.binary=binary;self.root=root.rstrip('/');self.config=config
 
     def call(self,*args,allow_missing=False):
-        env=os.environ.copy()
-        # Ne pas transmettre le jeton Supabase ou la clé de chiffrement à rclone.
-        for name in ('SUPABASE_ACCESS_TOKEN','SHENA_BACKUP_MASTER_KEY','SHENA_RCLONE_CONFIG_B64'):env.pop(name,None)
+        env=rclone_environment()
         command=[self.binary]
         if self.config:command+=['--config',str(self.config)]
         result=subprocess.run([*command,*args,'--log-level','ERROR'],env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
@@ -259,7 +263,7 @@ def authorize(binary,config):
         previous=old[REMOTE].get('root_folder_id')
     print('Autorisez rclone dans le navigateur Google. Aucun code OAuth à envoyer dans le chat.')
     result=subprocess.run([binary,'config','create',REMOTE,'drive','scope','drive.file','--config',str(config)],
-                          stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=600)
+                          stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=600,env=rclone_environment())
     if result.returncode:raise RuntimeError('Autorisation Google non terminée ; aucun jeton affiché')
     # Créer un dossier personnel neuf ; aucun ancien dossier n'est partagé/modifié.
     temp=object.__new__(DriveStore);temp.config=Path(config);temp.binary=binary
@@ -267,7 +271,7 @@ def authorize(binary,config):
         temp.private(previous,is_folder=True)
         folder=previous
     else:folder=temp.api('files?fields=id',{'name':'SHENA encrypted backups','mimeType':'application/vnd.google-apps.folder'})['id']
-    result=subprocess.run([binary,'config','update',REMOTE,'root_folder_id',folder,'--config',str(config)],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    result=subprocess.run([binary,'config','update',REMOTE,'root_folder_id',folder,'--config',str(config)],stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=rclone_environment())
     if result.returncode:raise RuntimeError('Configuration du dossier privé échouée')
     DriveStore(binary,config)
     save_config(Path(config).read_text())
