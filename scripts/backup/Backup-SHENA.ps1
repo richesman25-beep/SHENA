@@ -2,6 +2,7 @@
 [CmdletBinding()]
 param(
   [string]$DriveFolderId,
+  [string]$GoogleOAuthClientFile,
   [string]$RestoreImage,
   [string]$RestoreReceipt,
   [string]$OutputDirectory,
@@ -32,7 +33,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Installation des dépendances impossible ; ne 
 $pgBin = Join-Path $env:ProgramFiles 'PostgreSQL\17\bin'
 if (Test-Path $pgBin) { $env:PATH = "$pgBin;$env:PATH" }
 $arguments = @((Join-Path $PSScriptRoot 'shena_backup.py'))
-foreach ($pair in @(@('--drive-folder-id',$DriveFolderId), @('--restore-image',$RestoreImage), @('--restore-receipt',$RestoreReceipt), @('--output',$OutputDirectory))) {
+foreach ($pair in @(@('--google-oauth-client-file',$GoogleOAuthClientFile), @('--drive-folder-id',$DriveFolderId), @('--restore-image',$RestoreImage), @('--restore-receipt',$RestoreReceipt), @('--output',$OutputDirectory))) {
   if ($pair[1]) { $arguments += @($pair[0],$pair[1]) }
 }
 if ($AuthorizeDrive) { $arguments += '--authorize-drive' }

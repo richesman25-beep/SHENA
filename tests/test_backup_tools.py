@@ -327,8 +327,59 @@ class BackupTests(unittest.TestCase):
             output=io.StringIO()
             with patch.object(drive.RcloneTransfer,'call',side_effect=RuntimeError('Synthetic rclone startup denied')),patch.object(drive.DriveStore,'api',api),contextlib.redirect_stdout(output):drive.diagnose_drive('rclone',path)
             log=output.getvalue()
-            self.assertIn('"request": "permissions.list", "http": 403, "reason": "insufficientPermissions"',log)
+            self.assertIn('"oauth_client": "shared-default"',log)
+            self.assertEqual(log.count('"request"'),1)
             self.assertNotIn('PRIVATE_ID',log);self.assertNotIn('token',log)
+
+    def test_quota_backoff_is_bounded_and_never_replays_creation(self):
+        import urllib.error
+        from unittest.mock import MagicMock
+        store=object.__new__(drive.DriveStore)
+        store.settings=lambda:{'token':json.dumps({'access_token':'NEVER_PRINT'})}
+        def error(reason='RATE_LIMIT_EXCEEDED',headers=None):
+            return urllib.error.HTTPError('https://invalid',403,'masked',headers,io.BytesIO(json.dumps({'error':{'errors':[{'reason':reason}]}}).encode()))
+        opener=MagicMock();opener.open.side_effect=[error() for _ in range(5)]
+        with patch.object(drive.urllib.request,'build_opener',return_value=opener),patch.object(drive.time,'sleep') as sleep,patch.object(drive.random,'uniform',side_effect=lambda low,high:high):
+            with self.assertRaises(drive.GoogleDriveError):store.api('files/ROOT')
+            self.assertEqual(opener.open.call_count,5)
+            self.assertEqual([c.args[0] for c in sleep.call_args_list],[2,4,8,16])
+        for body,reason,headers in [({},'RATE_LIMIT_EXCEEDED',None),(None,'insufficientPermissions',None),(None,'RATE_LIMIT_EXCEEDED',{'Retry-After':'120'})]:
+            opener.open.reset_mock();opener.open.side_effect=error(reason,headers)
+            with patch.object(drive.urllib.request,'build_opener',return_value=opener),patch.object(drive.time,'sleep') as sleep:
+                with self.assertRaises(drive.GoogleDriveError):store.api('files',body)
+                self.assertEqual(opener.open.call_count,1);sleep.assert_not_called()
+
+    def test_quota_retry_success_and_retry_after(self):
+        import urllib.error
+        from unittest.mock import MagicMock
+        store=object.__new__(drive.DriveStore);store.settings=lambda:{'token':'{"access_token":"hidden"}'}
+        opener=MagicMock();response=MagicMock();response.__enter__.return_value=io.StringIO('{"ok":true}')
+        opener.open.side_effect=[urllib.error.HTTPError('https://invalid',429,'masked',{'Retry-After':'1'},io.BytesIO(b'{}')),response]
+        with patch.object(drive.urllib.request,'build_opener',return_value=opener),patch.object(drive.time,'sleep') as sleep,patch.object(drive.random,'uniform',return_value=1.5) as jitter:
+            self.assertEqual(store.api('files/ROOT'),{'ok':True})
+            jitter.assert_called_once_with(1.0,2);sleep.assert_called_once_with(1.5)
+
+    def test_oauth_mode_and_refresh_request_budget(self):
+        from unittest.mock import Mock
+        self.assertEqual(drive.oauth_client_mode({}),'shared-default')
+        self.assertEqual(drive.oauth_client_mode({'client_id':'personal.apps.googleusercontent.com'}),'personal')
+        store=object.__new__(drive.DriveStore);store.transport=Mock()
+        with patch.object(drive.time,'monotonic',side_effect=[10,10,11,309,310,310]):
+            store.refresh();store.refresh();store.refresh();store.refresh()
+        self.assertEqual(store.transport.call.call_count,2)
+
+    def test_personal_client_failure_preserves_active_profile_and_key(self):
+        from unittest.mock import Mock
+        original='[shena-drive]\ntype=drive\nscope=drive.file\nroot_folder_id=ROOT\ntoken={}\n'
+        with tempfile.TemporaryDirectory() as folder:
+            config=Path(folder)/'config';credentials=Path(folder)/'client.json'
+            credentials.write_text(json.dumps({'installed':{'client_id':'personal.apps.googleusercontent.com','client_secret':'HIDDEN_CLIENT'}}))
+            old=Mock();old.transport.call.return_value=b'[]'
+            result=Mock(returncode=0,stdout=b'obscured')
+            with patch.object(drive.sys.stdin,'isatty',return_value=True),patch.object(drive,'load_config',return_value=original),patch.object(drive,'LocalVault') as vault,patch.object(drive,'DriveStore',side_effect=[old,RuntimeError('access refused')]),patch.object(drive.subprocess,'run',return_value=result) as run,patch.object(drive,'save_config') as save,patch.object(drive,'secret_set') as secret:
+                with self.assertRaises(RuntimeError):drive.configure_personal_client('rclone',config,credentials)
+                self.assertEqual(config.read_text(),original);save.assert_not_called();secret.assert_not_called();vault.assert_called_once_with()
+                for call in run.call_args_list:self.assertNotIn('HIDDEN_CLIENT',str(call.args))
 
     def test_no_production_migration_or_automatic_attestation(self):
         source=(ROOT/'scripts/backup/shena_backup.py').read_text()

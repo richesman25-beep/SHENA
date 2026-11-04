@@ -12,6 +12,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
+import random
+from email.utils import parsedate_to_datetime
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -30,7 +33,7 @@ GOOGLE_REASONS=frozenset({
  'userRateLimitExceeded','dailyLimitExceeded','storageQuotaExceeded',
  'sharingRateLimitExceeded','notFound','authError','backendError',
  'ACCESS_TOKEN_SCOPE_INSUFFICIENT','SERVICE_DISABLED','API_KEY_SERVICE_BLOCKED',
- 'USER_PROJECT_DENIED','RATE_LIMIT_EXCEEDED','ACCESS_DENIED',
+ 'USER_PROJECT_DENIED','RATE_LIMIT_EXCEEDED','USER_RATE_LIMIT_EXCEEDED','ACCESS_DENIED',
 })
 
 class GoogleDriveError(RuntimeError):
@@ -169,7 +172,7 @@ class RcloneTransfer:
         env=rclone_environment()
         command=[self.binary]
         if self.config:command+=['--config',str(self.config)]
-        result=subprocess.run([*command,*args,'--log-level','ERROR'],env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        result=subprocess.run([*command,*args,'--log-level','ERROR','--tpslimit','2','--tpslimit-burst','1','--transfers','1','--checkers','1','--retries','3','--low-level-retries','3','--retries-sleep','5s'],env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         if result.returncode:
             if allow_missing and result.returncode in (3,4):return None
             raise RuntimeError('Échec transfert rclone ; aucun contenu OAuth publié')
@@ -209,11 +212,16 @@ class DriveStore:
     def __init__(self,binary,config):
         self.config=Path(config);self.binary=binary
         self.transport=RcloneTransfer(binary,REMOTE+':',config)
-        self.transport.call('about',REMOTE+':','--json') # Rafraîchit OAuth avant les appels officiels.
+        self.refresh() # Rafraîchit OAuth avant les appels officiels.
         cfg=self.settings()
         if cfg.get('type')!='drive' or cfg.get('scope')!='drive.file':
             raise RuntimeError('Remote Google dédié drive.file et dossier privé requis')
         self.bind_folder();self.private(self.folder,is_folder=True)
+
+    def refresh(self):
+        if time.monotonic()-getattr(self,'_refreshed',float('-inf'))>=300:
+            self.transport.call('about',REMOTE+':','--json')
+            self._refreshed=time.monotonic()
 
     def settings(self):
         cfg=configparser.ConfigParser(interpolation=None);cfg.read(self.config,encoding='utf-8')
@@ -225,9 +233,25 @@ class DriveStore:
         req=urllib.request.Request('https://www.googleapis.com/drive/v3/'+path,
               data=None if body is None else json.dumps(body).encode(),
               headers={'Authorization':'Bearer '+token,'Content-Type':'application/json','User-Agent':'SHENA-backup/1.0'})
-        try:
-            with urllib.request.build_opener(NoRedirect).open(req,timeout=60) as stream:return json.load(stream)
-        except urllib.error.HTTPError as e:raise GoogleDriveError(e.code,google_operation(path,body),safe_google_reasons(e)) from None
+        # GET seulement : jamais rejouer une création susceptible d'avoir réussi.
+        for attempt in range(5):
+            try:
+                with urllib.request.build_opener(NoRedirect).open(req,timeout=60) as stream:return json.load(stream)
+            except urllib.error.HTTPError as e:
+                error=GoogleDriveError(e.code,google_operation(path,body),safe_google_reasons(e))
+                retry=e.code==429 or (e.code==403 and bool(set(error.reasons)&{'rateLimitExceeded','userRateLimitExceeded','RATE_LIMIT_EXCEEDED','USER_RATE_LIMIT_EXCEEDED'}))
+                if body is not None or not retry or attempt==4:raise error from None
+                ceiling=2**(attempt+1)
+                minimum=0.0
+                header=e.headers.get('Retry-After') if e.headers else None
+                if header:
+                    try:minimum=max(0,float(header))
+                    except ValueError:
+                        try:minimum=max(0,parsedate_to_datetime(header).timestamp()-time.time())
+                        except (ValueError,TypeError,OverflowError):raise error from None
+                # Ne pas ignorer Retry-After et ne pas bloquer indéfiniment.
+                if minimum>ceiling:raise error from None
+                time.sleep(random.uniform(minimum,ceiling))
 
     def private(self,file_id,is_folder=False):
         if not re.fullmatch(r'[A-Za-z0-9_-]+',file_id):raise ValueError('Identifiant Google non reconnu')
@@ -273,7 +297,7 @@ class DriveStore:
 
 
     def locate(self,key):
-        self.transport.call('about',REMOTE+':','--json')
+        self.refresh()
         self.private(self.folder,is_folder=True)
         meta=json.loads(self.transport.call('lsjson',self.transport.path(key),'--stat'))
         file=self.private(meta['ID'])
@@ -283,7 +307,7 @@ class DriveStore:
         return {'drive_file_id':meta['ID'],'drive_backup_folder_id':file['parents'][0],'drive_folder_id':self.folder,'object_key':key}
 
     def upload(self,key,source):
-        self.transport.call('about',REMOTE+':','--json')
+        self.refresh()
         self.private(self.folder,is_folder=True)
         self.transport.upload(key,source)
         return self.locate(key)
@@ -314,7 +338,7 @@ class DriveStore:
         return receipt
 
     def download(self,receipt,target):
-        self.transport.call('about',REMOTE+':','--json')
+        self.refresh()
         if receipt.get('drive_folder_id')!=self.folder:raise RuntimeError('Autre dossier Google : arrêt')
         self.private(self.folder,is_folder=True)
         file=self.private(receipt['drive_file_id'])
@@ -400,18 +424,61 @@ def diagnose_drive(binary,config):
         # GET contrôlés. Aucun échec d'auth n'ouvre le contrôle de confidentialité.
         pass
     folder=temp.bind_folder(allow_create=False)
-    requests=[('files.get.metadata','files/'+folder+'?fields=id,ownedByMe,trashed,driveId,mimeType,parents'),
-              ('permissions.list','files/'+folder+'/permissions?fields=permissions(type,role,deleted),nextPageToken'),
-              ('files.get.private','files/'+folder+'?fields=id,ownedByMe,trashed,driveId,mimeType,parents,shared')]
-    for label,path in requests:
-        try:
-            meta=temp.api(path)
-            if label=='files.get.private':private_metadata(meta)
-            print(json.dumps({'request':label,'http':200,'reason':None}))
-        except GoogleDriveError as error:
-            print(json.dumps({'request':label,'http':error.status,'reason':','.join(error.reasons)}))
-    temp.private(folder,is_folder=True)
+    print(json.dumps({'oauth_client':oauth_client_mode(temp.settings()),'scope':'drive.file'}))
+    try:
+        temp.private(folder,is_folder=True)
+        print(json.dumps({'request':'files.get.private','http':200,'reason':None}))
+    except GoogleDriveError as error:
+        print(json.dumps({'request':'files.get.private','http':error.status,'reason':','.join(error.reasons)}))
+        raise
     print('Confidentialité vérifiée ; aucun dossier ou fichier supprimé, partagé ou déplacé.')
+
+
+def oauth_client_mode(settings):
+    client=settings.get('client_id','').strip()
+    return 'shared-default' if not client or client=='202264815644.apps.googleusercontent.com' else 'personal'
+
+
+def configure_personal_client(binary,config,credentials):
+    """Candidat séparé ; aucun remplacement du profil avant validation d'accès."""
+    if not sys.stdin.isatty():raise RuntimeError('Autorisation Google interactive nécessaire')
+    LocalVault() # Ne jamais remplacer la clé historique.
+    original=load_config()
+    Path(config).write_text(original,encoding='utf-8')
+    original_parser=configparser.ConfigParser(interpolation=None);original_parser.read_string(original)
+    previous=original_parser[REMOTE]
+    if not previous.get('root_folder_id'):raise RuntimeError('Dossier existant requis avant changement de client')
+    # Vérifier les anciennes archives avant et après changement, sans mutation Drive.
+    old_store=DriveStore(binary,config)
+    files=json.loads(old_store.transport.call('lsjson',REMOTE+':','--recursive','--files-only'))
+    try:
+        data=json.loads(Path(credentials).read_text(encoding='utf-8'))['installed']
+        client=data['client_id'];secret=data['client_secret']
+        if not isinstance(client,str) or not client.endswith('.apps.googleusercontent.com') or not isinstance(secret,str) or not secret or '\n' in secret:
+            raise ValueError()
+    except (ValueError,KeyError,TypeError):raise RuntimeError('JSON OAuth Desktop Google valide requis ; aucun contenu affiché') from None
+    obscured=subprocess.run([binary,'obscure','-'],input=secret.encode(),stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=rclone_environment())
+    if obscured.returncode:raise RuntimeError('Préparation du client OAuth impossible')
+    parser=configparser.ConfigParser(interpolation=None);parser.read_string(original)
+    parser[REMOTE]['client_id']=client;parser[REMOTE]['client_secret']=obscured.stdout.decode().strip()
+    parser[REMOTE]['scope']='drive.file';parser[REMOTE].pop('token',None)
+    try:
+        with Path(config).open('w',encoding='utf-8') as stream:parser.write(stream)
+        result=subprocess.run([binary,'config','reconnect',REMOTE+':','--config',str(config)],stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=600,env=rclone_environment())
+        if result.returncode:raise RuntimeError('Autorisation du client personnel non terminée')
+        candidate=DriveStore(binary,config)
+        for item in files:
+            if item.get('ID'):candidate.private(item['ID'])
+        # Garder aussi le profil précédent dans le coffre, jamais en clair sur Drive.
+        encoded=base64.b64encode(original.encode()).decode()
+        history='previous-oauth-'+secrets.token_hex(8)+'-'
+        for i in range(0,len(encoded),700):secret_set(history+str(i//700),encoded[i:i+700])
+        secret_set(history+'count',str((len(encoded)+699)//700))
+        save_config(Path(config).read_text(encoding='utf-8'))
+    except Exception:
+        Path(config).write_text(original,encoding='utf-8')
+        raise
+    print('Client personnel validé ; dossier, archives et clé conservés.')
 
 
 def select_existing_folder(binary,config,folder_id):

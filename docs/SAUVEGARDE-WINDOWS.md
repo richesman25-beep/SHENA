@@ -105,3 +105,58 @@ Si l'ancienne version avait créé le dossier **sans enregistrer OAuth au coffre
 Cette combinaison ne crée aucun dossier. Elle retrouve le dossier existant avec le même client OAuth, conserve son identifiant et la clé existante, puis teste les métadonnées en lecture seule. Si un profil existe mais sa clé manque au coffre, l'outil s'arrête avant OAuth sans générer de clé de remplacement. Une ancienne configuration personnalisée garde aussi son client_id/client_secret ; elle n'est pas remplacée par le client partagé de rclone. OAuth et l'identifiant du dossier sont désormais conservés même en cas de nouveau 403. Si plusieurs dossiers homonymes existent sans identifiant enregistré, l'outil refuse de choisir arbitrairement ou d'en créer un autre ; aucun dossier ni sauvegarde n'est déplacé ou supprimé. Dans ce seul cas, ajouter `-DriveFolderId IDENTIFIANT_DU_DOSSIER_EXISTANT` pour lier explicitement le dossier choisi depuis son URL Google. L'outil vérifie d'abord qu'il vous appartient et n'est pas partagé ; il refuse de remplacer une racine déjà enregistrée par un autre identifiant.
 
 Les tests de non-régression simulent un `permissions.list` en 403 et vérifient que le fichier existant reste téléchargeable via le même identifiant et que la clé n'est pas régénérée. Ils ne prouvent pas l'accès actuel à votre compte Drive : ce point est confirmé par l'exécution locale du diagnostic puis la restauration réelle. Aucun script SQL Production n'est exécuté par cette réparation.
+
+### Quota HTTP 403 RATE_LIMIT_EXCEEDED : client personnel
+
+Le profil initial sans `client_id` utilise le client OAuth partagé de rclone.
+`-DiagnoseDrive` affiche maintenant `shared-default` ou `personal`, sans identifiant
+ni secret. Cette indication provient du profil local ; elle ne prouve pas à elle
+seule quel quota Google a été épuisé.
+
+Les GET Google ont au maximum cinq tentatives avec jitter exponentiel (plafonds
+2, 4, 8 et 16 secondes). `Retry-After` est respecté ; si son délai dépasse le
+budget, l'opération s'arrête. Les refus de permission et créations ne sont pas
+rejoués. Les transferts rclone sont limités à deux requêtes/seconde, un transfert
+et un checker, avec retries bornés. Le diagnostic fait un seul contrôle de
+confidentialité et ne demande plus `permissions.list`. Le rafraîchissement OAuth
+via `about` est limité à une fois toutes les cinq minutes par processus.
+
+**Unique intervention Google indispensable** : dans votre propre projet
+[Google Cloud Console](https://console.cloud.google.com/), activez Google Drive
+API, configurez Google Auth Platform pour votre compte, puis créez un client OAuth
+**Application de bureau**. Autorisez uniquement le scope
+`https://www.googleapis.com/auth/drive.file`. Téléchargez son JSON hors du dépôt
+(par exemple dans votre dossier utilisateur privé). Aucun service payant ni
+activation de facturation n'est requis pour cette API. En mode OAuth Testing,
+ajoutez votre compte aux utilisateurs de test ; les refresh tokens de ce scope
+expirent généralement après sept jours : pour une exploitation durable, configurez
+le statut de publication approprié selon les règles Google de votre compte.
+Ne transmettez pas ce JSON dans le chat ou GitHub.
+
+Depuis le dossier SHENA, dans PowerShell :
+
+```powershell
+git fetch origin
+git switch feat/shena-production-activation
+git pull --ff-only origin feat/shena-production-activation
+.\scripts\backup\Backup-SHENA.ps1 -DiagnoseDrive
+.\scripts\backup\Backup-SHENA.ps1 -GoogleOAuthClientFile "$env:USERPROFILE\Downloads\shena-oauth-desktop.json"
+.\scripts\backup\Backup-SHENA.ps1
+```
+
+Le chemin JSON doit correspondre au fichier réellement téléchargé. L'import est
+une opération distincte : il ne démarre pas la sauvegarde. Il conserve la clé
+Windows et le dossier existants ; le secret client passe à rclone via stdin,
+jamais en argument. L'ancien profil est conservé dans le coffre OS avant activation.
+
+**Attention `drive.file`** : une nouvelle application OAuth n'hérite pas des accès
+accordés à l'ancienne. L'outil vérifie le dossier et tous les fichiers visibles
+avec l'ancien profil, puis leurs identités avec le nouveau. Si Google refuse
+l'accès (404 ou `appNotAuthorizedToFile`), le profil actif est conservé, sans
+nouveau dossier, déplacement, suppression ou élargissement de scope. Une
+sélection explicite des fichiers pour la nouvelle application via Google Picker
+peut alors être nécessaire ; ce flux n'est pas automatisé par cet outil.
+Si le quota partagé empêche même l'inventaire préalable, l'import s'arrête avant
+tout remplacement : attendre sa remise à zéro est nécessaire pour prouver la
+continuité d'accès. Ne pas activer les migrations tant que sauvegarde et
+restauration réelles ne sont pas validées.
