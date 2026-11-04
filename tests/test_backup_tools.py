@@ -284,11 +284,18 @@ class BackupTests(unittest.TestCase):
                 # Le contrôle réel est simulé après bind_folder pour cet échec.
                 with patch.object(drive.DriveStore,'__init__',side_effect=drive.GoogleDriveError(403,'files.get',['appNotAuthorizedToFile'])):
                     with self.assertRaises(drive.GoogleDriveError):drive.authorize('rclone',path,allow_create=False)
-                vault.assert_called_once_with(create=True)
+                vault.assert_called_once_with(create=False)
                 self.assertIn('EXISTING_ROOT',saved.call_args.args[0])
                 self.assertIn('ORIGINAL_CLIENT_SECRET',saved.call_args.args[0])
                 self.assertIn('scope = drive.file',saved.call_args.args[0])
                 self.assertIn('NEW_SYNTHETIC',saved.call_args.args[0])
+
+    def test_existing_profile_without_master_stops_before_oauth_or_key_generation(self):
+        config='[shena-drive]\ntype = drive\nscope = drive.file\nroot_folder_id = ORIGINAL_ROOT\n'
+        with patch.object(drive.sys.stdin,'isatty',return_value=True),patch.object(drive,'secret_get',return_value='1'),patch.object(drive,'load_config',return_value=config),patch.object(drive,'LocalVault',side_effect=RuntimeError('Clé absente')) as vault,patch.object(drive.subprocess,'run') as run:
+            with self.assertRaises(RuntimeError):drive.authorize('rclone',Path('/unused/private.conf'))
+            vault.assert_called_once_with(create=False)
+            run.assert_not_called()
 
     def test_existing_backup_can_still_be_downloaded_without_permissions_list(self):
         import types

@@ -328,12 +328,14 @@ class DriveStore:
 
 def authorize(binary,config,allow_create=True,folder_id=None):
     if not sys.stdin.isatty():raise RuntimeError('Autorisation Google à faire sur votre ordinateur avec navigateur')
-    LocalVault(create=True)
     previous=None;old_config=None
     if secret_get('rclone-count'):
         old_config=load_config()
         old=configparser.ConfigParser(interpolation=None);old.read_string(old_config)
         previous=old[REMOTE].get('root_folder_id')
+    # Un profil existant ne doit jamais provoquer une nouvelle clé si son
+    # coffre est incomplet : les anciennes archives doivent rester récupérables.
+    LocalVault(create=not bool(old_config))
     print('Autorisez rclone dans le navigateur Google. Aucun code OAuth à envoyer dans le chat.')
     if old_config:
         old[REMOTE]['scope']='drive.file'
