@@ -7,6 +7,7 @@ param(
   [string]$RestoreReceipt,
   [string]$OutputDirectory,
   [switch]$AuthorizeDrive,
+  [switch]$CreateNewDriveFolder,
   [switch]$ConfigureGitHub,
   [switch]$TestConnections,
   [switch]$DiagnoseDrive,
@@ -36,6 +37,7 @@ $arguments = @((Join-Path $PSScriptRoot 'shena_backup.py'))
 foreach ($pair in @(@('--google-oauth-client-file',$GoogleOAuthClientFile), @('--drive-folder-id',$DriveFolderId), @('--restore-image',$RestoreImage), @('--restore-receipt',$RestoreReceipt), @('--output',$OutputDirectory))) {
   if ($pair[1]) { $arguments += @($pair[0],$pair[1]) }
 }
+if ($CreateNewDriveFolder) { $arguments += '--create-new-drive-folder' }
 if ($AuthorizeDrive) { $arguments += '--authorize-drive' }
 if ($ConfigureGitHub) { $arguments += '--configure-github' }
 if ($TestConnections) { $arguments += '--test-connections' }

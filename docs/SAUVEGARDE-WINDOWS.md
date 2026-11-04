@@ -150,13 +150,24 @@ Windows et le dossier existants ; le secret client passe à rclone via stdin,
 jamais en argument. L'ancien profil est conservé dans le coffre OS avant activation.
 
 **Attention `drive.file`** : une nouvelle application OAuth n'hérite pas des accès
-accordés à l'ancienne. L'outil vérifie le dossier et tous les fichiers visibles
-avec l'ancien profil, puis leurs identités avec le nouveau. Si Google refuse
-l'accès (404 ou `appNotAuthorizedToFile`), le profil actif est conservé, sans
-nouveau dossier, déplacement, suppression ou élargissement de scope. Une
-sélection explicite des fichiers pour la nouvelle application via Google Picker
-peut alors être nécessaire ; ce flux n'est pas automatisé par cet outil.
-Si le quota partagé empêche même l'inventaire préalable, l'import s'arrête avant
-tout remplacement : attendre sa remise à zéro est nécessaire pour prouver la
-continuité d'accès. Ne pas activer les migrations tant que sauvegarde et
+accordés à l'ancienne. L'outil initialise directement le nouveau client, sans requête avec l'ancien
+profil, puis contrôle la confidentialité du dossier avec le nouveau jeton. Si Google refuse
+l'accès (404 ou refus d'autorisation), le profil actif est conservé par défaut.
+Vous pouvez explicitement autoriser un dossier privé distinct :
+
+```powershell
+.\scripts\backup\Backup-SHENA.ps1 -GoogleOAuthClientFile "$env:USERPROFILE\Downloads\shena-oauth-desktop.json" -CreateNewDriveFolder
+```
+
+Cette option ne crée un dossier que si l'ancien est inaccessible, jamais sur une
+erreur de quota. L'ancien profil est archivé sous un nom unique dans le coffre
+Windows avant création. L'ancien dossier et ses fichiers ne sont ni déplacés,
+ni partagés, ni supprimés ; la clé maîtresse reste identique. Le profil candidat
+avec le nouvel identifiant est également journalisé dans le coffre avant contrôle
+de confidentialité. Le profil actif n'est remplacé qu'après validation.
+Les anciennes archives ne sont pas déclarées accessibles au nouveau client :
+leur restauration reste liée aux autorisations de l'ancienne application.
+Une sélection Google Picker peut être nécessaire pour leur donner accès au nouveau
+client ; ce flux n'est pas automatisé ici. Le changement de client ne valide
+aucune restauration. Ne pas activer les migrations tant que sauvegarde et
 restauration réelles ne sont pas validées.

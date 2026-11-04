@@ -257,7 +257,7 @@ def execute(a):
     with tempfile.TemporaryDirectory(prefix='access-',dir=root) as folder:
         access=private_directory(folder);config=access/'rclone.conf'
         if a.google_oauth_client_file:
-            configure_personal_client(binary,config,a.google_oauth_client_file)
+            configure_personal_client(binary,config,a.google_oauth_client_file,create_new_folder=a.create_new_drive_folder)
             return
         if a.authorize_drive:
             authorize(binary,config,allow_create=not a.diagnose_drive,folder_id=a.drive_folder_id)
@@ -359,6 +359,7 @@ def run_backup(a,root,store,vault,token,project):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--google-oauth-client-file',help='JSON OAuth Desktop local, hors dépôt ; conserve le dossier et la clé')
+    parser.add_argument('--create-new-drive-folder',action='store_true',help='Avec import OAuth seulement : nouveau dossier si ancien inaccessible')
     parser.add_argument('--authorize-drive',action='store_true')
     parser.add_argument('--configure-github',action='store_true')
     parser.add_argument('--test-connections',action='store_true')
@@ -370,6 +371,7 @@ def main():
     default=Path(os.environ.get('LOCALAPPDATA',Path.home()/'.local/state'))/'SHENA/backups'
     parser.add_argument('--output',type=Path,default=default)
     a=parser.parse_args()
+    if a.create_new_drive_folder and not a.google_oauth_client_file:parser.error("--create-new-drive-folder nécessite --google-oauth-client-file")
     try:execute(a)
     except Exception as e:
         # Ne pas imprimer les exceptions SDK, libpq ou SQL contenant des secrets.

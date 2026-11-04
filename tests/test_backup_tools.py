@@ -376,10 +376,49 @@ class BackupTests(unittest.TestCase):
             credentials.write_text(json.dumps({'installed':{'client_id':'personal.apps.googleusercontent.com','client_secret':'HIDDEN_CLIENT'}}))
             old=Mock();old.transport.call.return_value=b'[]'
             result=Mock(returncode=0,stdout=b'obscured')
-            with patch.object(drive.sys.stdin,'isatty',return_value=True),patch.object(drive,'load_config',return_value=original),patch.object(drive,'LocalVault') as vault,patch.object(drive,'DriveStore',side_effect=[old,RuntimeError('access refused')]),patch.object(drive.subprocess,'run',return_value=result) as run,patch.object(drive,'save_config') as save,patch.object(drive,'secret_set') as secret:
+            with patch.object(drive.sys.stdin,'isatty',return_value=True),patch.object(drive,'load_config',return_value=original),patch.object(drive,'LocalVault') as vault,patch.object(drive.DriveStore,'private',side_effect=RuntimeError('access refused')),patch.object(drive.subprocess,'run',return_value=result) as run,patch.object(drive,'save_config') as save,patch.object(drive,'secret_set') as secret:
                 with self.assertRaises(RuntimeError):drive.configure_personal_client('rclone',config,credentials)
                 self.assertEqual(config.read_text(),original);save.assert_not_called();secret.assert_not_called();vault.assert_called_once_with()
                 for call in run.call_args_list:self.assertNotIn('HIDDEN_CLIENT',str(call.args))
+
+    def test_personal_import_never_uses_old_client_and_folder_creation_is_explicit(self):
+        from unittest.mock import Mock
+        original='[shena-drive]\ntype=drive\nscope=drive.file\nroot_folder_id=ROOT\nclient_id=OLD.apps.googleusercontent.com\ntoken={"access_token":"OLD_TOKEN"}\n'
+        for denial,allow,success in [(None,False,True),(404,False,False),(404,True,True),(403,True,False)]:
+            with self.subTest(denial=denial,allow=allow),tempfile.TemporaryDirectory() as folder:
+                config=Path(folder)/'config';credentials=Path(folder)/'client.json'
+                credentials.write_text(json.dumps({'installed':{'client_id':'NEW.apps.googleusercontent.com','client_secret':'HIDDEN'}}))
+                calls=[]
+                def run(command,**kwargs):
+                    self.assertNotIn('HIDDEN',str(command))
+                    if 'reconnect' in command:
+                        parser=drive.configparser.ConfigParser(interpolation=None);parser.read(config)
+                        self.assertEqual(parser[drive.REMOTE]['client_id'],'NEW.apps.googleusercontent.com')
+                        self.assertNotIn('token',parser[drive.REMOTE])
+                        parser[drive.REMOTE]['token']='{"access_token":"NEW_TOKEN"}'
+                        with config.open('w') as stream:parser.write(stream)
+                    return Mock(returncode=0,stdout=b'obscured')
+                def api(store,path,body=None):
+                    self.assertEqual(json.loads(store.settings()['token'])['access_token'],'NEW_TOKEN')
+                    calls.append((path,body))
+                    if path.startswith('files/ROOT') and denial:
+                        raise drive.GoogleDriveError(denial,'files.get',['RATE_LIMIT_EXCEEDED'] if denial==403 else ['notFound'])
+                    if body is not None:return {'id':'NEW_ROOT'}
+                    return {'id':'ROOT','ownedByMe':True,'trashed':False,'shared':False,'mimeType':'application/vnd.google-apps.folder'}
+                with patch.object(drive.sys.stdin,'isatty',return_value=True),patch.object(drive,'load_config',return_value=original),patch.object(drive,'LocalVault') as vault,patch.object(drive.subprocess,'run',side_effect=run),patch.object(drive.DriveStore,'api',api),patch.object(drive.RcloneTransfer,'call',return_value=b'{}') as transport,patch.object(drive,'save_config') as save,patch.object(drive,'secret_set') as secret:
+                    if success:drive.configure_personal_client('rclone',config,credentials,create_new_folder=allow)
+                    else:
+                        with self.assertRaises(RuntimeError):drive.configure_personal_client('rclone',config,credentials,create_new_folder=allow)
+                    vault.assert_called_once_with()
+                    creates=[c for c in calls if c[1] is not None]
+                    self.assertEqual(len(creates),int(denial==404 and allow))
+                    if success:
+                        save.assert_called_once();self.assertEqual(transport.call_count,1)
+                        self.assertIn('NEW_ROOT' if creates else 'ROOT',config.read_text())
+                        archived=''.join(c.args[1] for c in secret.call_args_list if c.args[0].startswith('previous-oauth-') and not c.args[0].endswith('count'))
+                        self.assertEqual(drive.base64.b64decode(archived).decode(),original)
+                    else:
+                        self.assertEqual(config.read_text(),original);save.assert_not_called();transport.assert_not_called()
 
     def test_no_production_migration_or_automatic_attestation(self):
         source=(ROOT/'scripts/backup/shena_backup.py').read_text()

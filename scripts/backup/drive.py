@@ -439,7 +439,7 @@ def oauth_client_mode(settings):
     return 'shared-default' if not client or client=='202264815644.apps.googleusercontent.com' else 'personal'
 
 
-def configure_personal_client(binary,config,credentials):
+def configure_personal_client(binary,config,credentials,create_new_folder=False):
     """Candidat séparé ; aucun remplacement du profil avant validation d'accès."""
     if not sys.stdin.isatty():raise RuntimeError('Autorisation Google interactive nécessaire')
     LocalVault() # Ne jamais remplacer la clé historique.
@@ -448,9 +448,7 @@ def configure_personal_client(binary,config,credentials):
     original_parser=configparser.ConfigParser(interpolation=None);original_parser.read_string(original)
     previous=original_parser[REMOTE]
     if not previous.get('root_folder_id'):raise RuntimeError('Dossier existant requis avant changement de client')
-    # Vérifier les anciennes archives avant et après changement, sans mutation Drive.
-    old_store=DriveStore(binary,config)
-    files=json.loads(old_store.transport.call('lsjson',REMOTE+':','--recursive','--files-only'))
+    # Aucun appel réseau avec le profil historique : son quota peut être bloqué.
     try:
         data=json.loads(Path(credentials).read_text(encoding='utf-8'))['installed']
         client=data['client_id'];secret=data['client_secret']
@@ -466,19 +464,45 @@ def configure_personal_client(binary,config,credentials):
         with Path(config).open('w',encoding='utf-8') as stream:parser.write(stream)
         result=subprocess.run([binary,'config','reconnect',REMOTE+':','--config',str(config)],stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=600,env=rclone_environment())
         if result.returncode:raise RuntimeError('Autorisation du client personnel non terminée')
-        candidate=DriveStore(binary,config)
-        for item in files:
-            if item.get('ID'):candidate.private(item['ID'])
-        # Garder aussi le profil précédent dans le coffre, jamais en clair sur Drive.
-        encoded=base64.b64encode(original.encode()).decode()
-        history='previous-oauth-'+secrets.token_hex(8)+'-'
-        for i in range(0,len(encoded),700):secret_set(history+str(i//700),encoded[i:i+700])
-        secret_set(history+'count',str((len(encoded)+699)//700))
+        # Contrôle direct avec le NOUVEAU token : ne pas initialiser le backend
+        # rclone sur une racine potentiellement non autorisée par drive.file.
+        candidate=object.__new__(DriveStore);candidate.config=Path(config);candidate.binary=binary
+        candidate.transport=RcloneTransfer(binary,REMOTE+':',config)
+        folder=previous['root_folder_id'];created=False
+        try:candidate.private(folder,is_folder=True)
+        except GoogleDriveError as error:
+            inaccessible=error.status==404 or (error.status==403 and bool(set(error.reasons)&{'appNotAuthorizedToFile','insufficientFilePermissions','insufficientPermissions'}))
+            if not inaccessible:raise
+            if not create_new_folder:
+                raise RuntimeError('Le nouveau client ne peut pas accéder à l’ancien dossier. Profil et clé conservés. Reprendre avec -CreateNewDriveFolder pour créer un dossier privé distinct ; les anciennes archives resteront liées au profil historique.') from None
+            # Avant toute création, conserver intégralement le profil historique.
+            preserve_oauth_profile(original,'previous-oauth')
+            folder=candidate.api('files?fields=id',{'name':'SHENA encrypted backups','mimeType':'application/vnd.google-apps.folder'})['id']
+            if not re.fullmatch(r'[A-Za-z0-9_-]+',folder):raise RuntimeError('Identifiant du nouveau dossier non reconnu')
+            current=configparser.ConfigParser(interpolation=None);current.read(config,encoding='utf-8')
+            current[REMOTE]['root_folder_id']=folder
+            with Path(config).open('w',encoding='utf-8') as stream:current.write(stream)
+            # Journal dans le coffre avant le contrôle : dossier récupérable même
+            # si Google refuse ensuite une lecture. Aucun profil actif remplacé.
+            preserve_oauth_profile(Path(config).read_text(encoding='utf-8'),'pending-oauth')
+            candidate.private(folder,is_folder=True);created=True
+        # Contrôler le backend uniquement après validation du dossier candidat.
+        DriveStore(binary,config)
+        if not created:preserve_oauth_profile(original,'previous-oauth')
         save_config(Path(config).read_text(encoding='utf-8'))
     except Exception:
         Path(config).write_text(original,encoding='utf-8')
         raise
-    print('Client personnel validé ; dossier, archives et clé conservés.')
+    if created:print('Client personnel validé ; nouveau dossier privé actif. Ancien dossier et ancien profil conservés ; accès aux anciennes archives non validé avec le nouveau client.')
+    else:print('Client personnel validé ; dossier et clé conservés. Accès aux anciennes archives non vérifié individuellement.')
+
+
+def preserve_oauth_profile(value,prefix):
+    # Noms uniques : ne jamais écraser un ancien profil ou sa clé.
+    encoded=base64.b64encode(value.encode()).decode()
+    history=prefix+'-'+secrets.token_hex(8)+'-'
+    for i in range(0,len(encoded),700):secret_set(history+str(i//700),encoded[i:i+700])
+    secret_set(history+'count',str((len(encoded)+699)//700))
 
 
 def select_existing_folder(binary,config,folder_id):
