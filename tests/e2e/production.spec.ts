@@ -46,9 +46,9 @@ test("proximité réelle non configurée reste explicitement indisponible", asyn
 }) => {
   await page.goto("/boutique");
   await expect(
-    page.getByLabel("Disponible près de moi", { exact: true }),
+    page.getByRole("checkbox", { name: "Disponible près de moi", exact: true }),
   ).toBeDisabled();
-  await expect(page.locator(".filters")).toContainText(
+  await expect(page.locator(".filters:visible")).toContainText(
     "Stocks géographiques réels non configurés",
   );
   await page.goto("/panier");

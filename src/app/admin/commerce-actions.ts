@@ -13,7 +13,7 @@ async function adminCommerce(
   const context = await commerceContext();
   if (!context?.capabilities[feature])
     throw new CheckoutError(
-      "Cette opération n’est pas activée sur l’environnement staging validé.",
+      "Cette opération n’est pas activée sur cet environnement validé.",
     );
   const verified = await context.client.auth.getUser();
   if (verified.error || verified.data.user?.id !== admin.userId)

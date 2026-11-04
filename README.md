@@ -101,3 +101,7 @@ Le panier, le devis côté serveur, les commandes de test, les zones de livraiso
 Voir [le rapport et les étapes manuelles](docs/SPRINT-MVP-STAGING.md), [les métadonnées confirmées de products](docs/security/PRODUCTS-CONFIRMED-SCHEMA.md) et [les résultats de validation locale](docs/admin/VALIDATION.md). La PR reste à examiner ; aucune fusion automatique.
 
 Publication du catalogue seul : [procédure minimale](docs/PUBLISH-CATALOG.md). Contrôle local sans réseau : `npm run check:deployment -- production` (ou `preview` dans son environnement dédié).
+
+## Préparation de l’activation Production
+
+La préparation des installations persistantes, des sauvegardes DB + Storage, des deux administrateurs et des activations séparées est décrite dans [PRODUCTION-ACTIVATION.md](docs/PRODUCTION-ACTIVATION.md). Aucun script SQL n’est appliqué automatiquement ; les commandes, paiements et téléchargements restent désactivés avant approbation et recette.

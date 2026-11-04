@@ -1,3 +1,5 @@
+import { ManualPaymentInstructions } from "@/components/manual-payment-instructions";
+import { DigitalOrderDownloads } from "@/components/digital-order-downloads";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { commerceContext } from "@/lib/commerce/server";
@@ -70,6 +72,17 @@ export default async function CustomerOrder({
       <OrderSummary
         order={result.data as CommerceOrder}
         items={items.data as CommerceOrderItem[]}
+      />
+      <ManualPaymentInstructions
+        client={context.client}
+        enabled={context.capabilities.manualPayments}
+        status={result.data.status}
+      />
+      <DigitalOrderDownloads
+        status={result.data.status}
+        productIds={(items.data as CommerceOrderItem[])
+          .filter((i) => i.product_type === "digital")
+          .map((i) => i.product_id)}
       />
       <Link href="/boutique" className="button button-secondary">
         Revenir à la boutique

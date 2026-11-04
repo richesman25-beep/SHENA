@@ -346,6 +346,23 @@ try {
     await fn();
     console.log(`PASS ${name}`);
   };
+  async function seedCheckout(target, id, quantity) {
+    // Un document sans React empêche CartProvider de réécrire le stockage
+    // pendant son hydratation. La destination lit la fixture avant de monter.
+    await target.goto(base + "/robots.txt");
+    await target.evaluate(
+      ({ id, quantity }) =>
+        localStorage.setItem(
+          "shena.cart.v1.live",
+          JSON.stringify([{ id, quantity }]),
+        ),
+      { id, quantity },
+    );
+    await target.goto(base + "/commander");
+    await expect(
+      target.getByRole("combobox", { name: "Département", exact: true }),
+    ).toBeVisible();
+  }
   async function login(email) {
     await page.goto(base + "/admin/connexion");
     await page.getByLabel("E-mail", { exact: true }).fill(email);
@@ -410,6 +427,16 @@ try {
         });
         assert.equal(response.status(), 200);
         assert.equal((await response.json()).quote.canOrder, false);
+        const download = await page.request.get(
+          base + `/api/digital/${rows[0].id}/download?paid=true`,
+        );
+        assert.equal(download.status(), 404);
+        assert.equal(download.headers().location, undefined);
+        await page.goto(base + "/admin/digital/releases");
+        await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+          "Versions numériques indisponibles",
+        );
+        await expect(page.locator('input[name="sha256"]')).toHaveCount(0);
         assert.equal(JSON.stringify(rows), before);
       } finally {
         missingMigrations = false;
@@ -658,16 +685,7 @@ try {
   await check(
     "checkout creates an unpaid order through Next actions SDK and local PostgreSQL",
     async () => {
-      await page.goto(base + "/panier");
-      await page.evaluate(
-        ([id]) =>
-          localStorage.setItem(
-            "shena.cart.v1.live",
-            JSON.stringify([{ id, quantity: 2 }]),
-          ),
-        [rows[0].id],
-      );
-      await page.goto(base + "/commander");
+      await seedCheckout(page, rows[0].id, 2);
       await page
         .getByLabel("Département", { exact: true })
         .selectOption("centre");
@@ -757,15 +775,7 @@ try {
         })
         .click();
       await expect(buyer).toHaveURL(base + "/commander");
-      await buyer.evaluate(
-        ([id]) =>
-          localStorage.setItem(
-            "shena.cart.v1.live",
-            JSON.stringify([{ id, quantity: 1 }]),
-          ),
-        [rows[1].id],
-      );
-      await buyer.reload();
+      await seedCheckout(buyer, rows[1].id, 1);
       await buyer
         .getByRole("button", {
           name: "Vérifier les prix côté serveur",

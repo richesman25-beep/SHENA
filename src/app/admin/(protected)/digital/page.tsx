@@ -31,6 +31,9 @@ export default async function DigitalAdmin() {
         <div>
           <span className="eyebrow">VOTRE DÉPARTEMENT NUMÉRIQUE</span>
           <h1>SHENA Digital</h1>
+          <Link href="/admin/digital/releases" className="text-link">
+            Contrôler les versions privées →
+          </Link>
           <p>
             E-books, templates, documents, ressources et formations autorisés.
           </p>

@@ -18,7 +18,7 @@ BEGIN
  IF to_regprocedure('pg_catalog.gen_random_uuid()') IS NULL THEN RAISE EXCEPTION 'gen_random_uuid natif requis ; ne pas installer une extension supposée'; END IF;
 END $target$;
 
--- Fidèle : pas de NOT NULL ajouté aux huit colonnes déclarées nullables.
+-- Fidèle : pas de NOT NULL ajouté aux sept colonnes déclarées nullables.
 -- Pour les cinq défauts NULL rapportés, aucun DEFAULT n'est inventé.
 CREATE TABLE public.products (
  id uuid DEFAULT gen_random_uuid() NOT NULL,

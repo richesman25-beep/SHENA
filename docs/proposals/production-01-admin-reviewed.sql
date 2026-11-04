@@ -35,7 +35,7 @@ BEGIN
   END IF;
   SELECT array_agg(attname::text ORDER BY attname) INTO actual
     FROM pg_catalog.pg_attribute WHERE attrelid=t AND attnum>0 AND NOT attisdropped;
-  IF actual IS DISTINCT FROM expected THEN RAISE EXCEPTION 'Colonnes différentes du contrat à dix colonnes : arrêt'; END IF;
+  IF actual IS DISTINCT FROM expected THEN RAISE EXCEPTION 'Colonnes différentes du contrat à neuf colonnes : arrêt'; END IF;
   FOR r IN SELECT attname,atttypid,atttypmod,attidentity,attgenerated
       FROM pg_catalog.pg_attribute WHERE attrelid=t AND attnum>0 AND NOT attisdropped LOOP
     IF r.attidentity<>'' OR r.attgenerated<>'' THEN RAISE EXCEPTION 'Colonne générée/identity non examinée : %',r.attname; END IF;

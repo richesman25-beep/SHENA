@@ -76,8 +76,9 @@ export function OrderSummary({
         </div>
       </dl>
       <p className="info-box">
-        La création d’une commande ne confirme pas son paiement. Aucun fichier
-        payant n’est délivré depuis cette page.
+        La création d’une commande ne confirme pas son paiement. Les fichiers
+        payants restent protégés jusqu’à vérification du paiement et des
+        autorisations.
       </p>
     </section>
   );

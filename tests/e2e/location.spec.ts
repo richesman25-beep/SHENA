@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 async function choose(page: Page, department: string, commune: string) {
-  await page.locator(".filters .location-trigger").click();
+  await page.locator(".filters:visible .location-trigger").click();
   const dialog = page.getByRole("dialog");
   await dialog
     .getByLabel("Département", { exact: true })
@@ -16,11 +16,13 @@ test("choix, proximité, tout Haïti et persistance sans GPS", async ({
 }) => {
   await page.goto("/boutique");
   await expect(
-    page.getByLabel("Disponible près de moi", { exact: true }),
+    page.getByRole("checkbox", { name: "Disponible près de moi", exact: true }),
   ).toBeDisabled();
   await choose(page, "centre", "hinche");
-  await expect(page.locator(".filters")).toContainText("Hinche");
-  await page.getByLabel("Disponible près de moi", { exact: true }).check();
+  await expect(page.locator(".filters:visible")).toContainText("Hinche");
+  await page
+    .getByRole("checkbox", { name: "Disponible près de moi", exact: true })
+    .check();
   await page.getByRole("button", { name: "Appliquer les filtres" }).click();
   await expect(page.locator(".product-card")).toHaveCount(4);
   await expect(
@@ -34,9 +36,9 @@ test("choix, proximité, tout Haïti et persistance sans GPS", async ({
     fullPage: true,
   });
   await page.reload();
-  await expect(page.locator(".filters")).toContainText("Hinche");
+  await expect(page.locator(".filters:visible")).toContainText("Hinche");
   await expect(
-    page.getByLabel("Disponible près de moi", { exact: true }),
+    page.getByRole("checkbox", { name: "Disponible près de moi", exact: true }),
   ).toBeChecked();
   await page
     .getByRole("link", {
@@ -47,7 +49,9 @@ test("choix, proximité, tout Haïti et persistance sans GPS", async ({
   await expect(page.locator(".product-card")).toHaveCount(6);
   await expect(page.locator(".catalog-results")).toContainText("8 produits");
   await choose(page, "sud-est", "jacmel");
-  await page.getByLabel("Disponible près de moi", { exact: true }).check();
+  await page
+    .getByRole("checkbox", { name: "Disponible près de moi", exact: true })
+    .check();
   await page.getByRole("button", { name: "Appliquer les filtres" }).click();
   await expect(page.locator(".product-card")).toHaveCount(2);
   await expect(page.locator(".catalog-grid")).toContainText(
@@ -59,7 +63,7 @@ test("changer le département efface la commune et les options incompatibles", a
 }) => {
   await page.goto("/boutique");
   await choose(page, "centre", "maissade");
-  await page.locator(".filters .location-trigger").click();
+  await page.locator(".filters:visible .location-trigger").click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Département", { exact: true }).selectOption("nord");
   await expect(dialog.getByLabel("Commune", { exact: true })).toHaveValue("");
@@ -69,7 +73,9 @@ test("changer le département efface la commune et les options incompatibles", a
   ).toBeDisabled();
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
-  await expect(page.locator(".filters .location-trigger")).toBeFocused();
+  await expect(
+    page.locator(".filters:visible .location-trigger"),
+  ).toBeFocused();
 });
 test("fiches : origines et tarifs inconnus, numérique hors transport", async ({
   page,

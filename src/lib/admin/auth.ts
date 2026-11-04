@@ -13,7 +13,8 @@ export const adminContext = cache(async () => {
     if (!client) return { status: "unconfigured" as const };
     const { data, error } = await client.auth.getUser();
     if (error || !data.user) return { status: "anonymous" as const };
-    if (!hasAdminRole(data.user)) return { status: "forbidden" as const };
+    if (!data.user.email_confirmed_at || !hasAdminRole(data.user))
+      return { status: "forbidden" as const };
     const result = await client.rpc("shena_admin_status");
     return {
       status: "admin" as const,

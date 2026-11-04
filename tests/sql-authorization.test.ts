@@ -45,13 +45,6 @@ test("Modèle PostgreSQL local: authentification admin et métadonnées, hors co
       },
     );
     await t.test(
-      "Correctif ACL final : essais réservés au vrai SHENA-STAGING après reproduction exacte",
-      {
-        skip: "Instruction du propriétaire : aucun essai local du correctif final, notamment MAINTAIN.",
-      },
-      async () => {},
-    );
-    await t.test(
       "migration admin corrigée: client non promu, deux admins autorisés, prix/stock invalides refusés",
       async () => {
         await db.exec(

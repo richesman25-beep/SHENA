@@ -16,7 +16,7 @@
 
 ## Ce que ces tests démontrent
 
-Les tests unitaires préservent catalogue, panier et géographie de la version premium. Les nouveaux tests vérifient notamment : rôle de confiance app_metadata uniquement, capacités absentes/refusées, validation des prix et stocks, adaptation des dix colonnes existantes, type inconnu non inventé, rejet des produits inactifs ou invalides, panier alimenté par le catalogue fourni, refus de clé service et protocole non HTTPS, et refus des liens de fichiers privés signés comme images publiques.
+Les tests unitaires préservent catalogue, panier et géographie de la version premium. Les nouveaux tests vérifient notamment : rôle de confiance app_metadata uniquement, capacités absentes/refusées, validation des prix et stocks, adaptation des neuf colonnes existantes, type inconnu non inventé, rejet des produits inactifs ou invalides, panier alimenté par le catalogue fourni, refus de clé service et protocole non HTTPS, et refus des liens de fichiers privés signés comme images publiques.
 
 Un test utilise le véritable SDK Supabase avec un **transport HTTP simulé** pour examiner la requête select connue et active=eq.true. Le refus HTTP ne déclenche pas de données de remplacement. Ces tests n'appellent pas Supabase SHENA et ne prouvent pas ses politiques réelles.
 

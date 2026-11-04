@@ -1,0 +1,73 @@
+name: Backup tools
+on:
+  push:
+    paths:
+      - "scripts/backup/**"
+      - "tests/test_backup_tools.py"
+      - ".github/workflows/backup-tools.yml"
+  pull_request:
+    paths:
+      - "scripts/backup/**"
+      - "tests/test_backup_tools.py"
+      - ".github/workflows/backup-tools.yml"
+permissions:
+  contents: read
+jobs:
+  backup-tools:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r scripts/backup/requirements.txt
+      - name: Install verified official rclone without Google credentials
+        shell: python
+        run: |
+          import os, sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts/backup')
+          from drive import ensure_rclone
+          binary = ensure_rclone(Path(os.environ['RUNNER_TEMP']) / 'shena-rclone-tools')
+          with open(os.environ['GITHUB_PATH'], 'a') as output:
+              output.write(str(Path(binary).parent) + '\n')
+      - name: Test backup tooling with synthetic data only
+        env:
+          SHENA_BACKUP_RCLONE_TESTS: "1"
+          SHENA_BACKUP_DOCKER_TESTS: ${{ runner.os == 'Linux' && '1' || '0' }}
+        run: python tests/test_backup_tools.py
+      - name: Parse Windows wrapper without executing a backup
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            "$PWD/scripts/backup/Backup-SHENA.ps1", [ref]$tokens, [ref]$parseErrors
+          ) | Out-Null
+          if ($parseErrors.Count -gt 0) {
+            $parseErrors | Format-List Message,Extent
+            throw 'PowerShell syntax validation failed'
+          }
+      - name: Parse with Windows PowerShell 5.1
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $tokens = $null
+          $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            "$PWD/scripts/backup/Backup-SHENA.ps1", [ref]$tokens, [ref]$parseErrors
+          ) | Out-Null
+          if ($parseErrors.Count -gt 0) {
+            $parseErrors | Format-List Message,Extent
+            throw 'Windows PowerShell syntax validation failed'
+          }
+      - name: Smoke test Windows wrapper without credentials or source access
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: .\scripts\backup\Backup-SHENA.ps1 -ShowHelp
