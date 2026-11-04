@@ -23,6 +23,39 @@ from core import REF, CHUNK, digest, private_directory
 SERVICE='SHENA Backup'
 REMOTE='shena-drive'
 
+# Codes publics connus seulement : jamais message, corps ou identifiant.
+GOOGLE_REASONS=frozenset({
+ 'insufficientPermissions','insufficientFilePermissions','appNotAuthorizedToFile',
+ 'accessNotConfigured','forbidden','domainPolicy','rateLimitExceeded',
+ 'userRateLimitExceeded','dailyLimitExceeded','storageQuotaExceeded',
+ 'sharingRateLimitExceeded','notFound','authError','backendError',
+ 'ACCESS_TOKEN_SCOPE_INSUFFICIENT','SERVICE_DISABLED','API_KEY_SERVICE_BLOCKED',
+ 'USER_PROJECT_DENIED','RATE_LIMIT_EXCEEDED','ACCESS_DENIED',
+})
+
+class GoogleDriveError(RuntimeError):
+    def __init__(self,status,operation,reasons):
+        self.status=status;self.operation=operation
+        self.reasons=tuple(sorted(set(r for r in reasons if isinstance(r,str) and r in GOOGLE_REASONS))) or ('unknown',)
+        super().__init__('Google Drive HTTP '+str(status)+' ; requête='+operation+' ; reason='+','.join(self.reasons))
+
+
+def google_operation(path,body=None):
+    route=urllib.parse.urlsplit(path).path
+    if route=='files':return 'files.create' if body is not None else 'files.list'
+    if re.fullmatch(r'files/[A-Za-z0-9_-]+/permissions',route):return 'permissions.list'
+    if re.fullmatch(r'files/[A-Za-z0-9_-]+',route):return 'files.get'
+    return 'drive.request'
+
+
+def safe_google_reasons(error):
+    try:
+        payload=json.loads(error.read(16384)).get('error',{})
+        records=[*(payload.get('errors') or []),*(payload.get('details') or [])]
+        return [r.get('reason') for r in records if isinstance(r,dict)]
+    except Exception:return []
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self,*args,**kwargs):raise RuntimeError('Redirection refusée pour protéger OAuth')
 
@@ -164,15 +197,23 @@ def owner_only(metadata,permissions):
         raise RuntimeError('Partage Drive détecté : sauvegarde arrêtée sans modifier les permissions')
 
 
+def private_metadata(meta):
+    if meta.get('ownedByMe') is not True or meta.get('trashed') is not False or meta.get('driveId'):
+        raise RuntimeError('Dossier/fichier personnel privé requis')
+    if meta.get('shared') is not False:
+        raise RuntimeError('Partage Drive présent ou état inconnu : arrêt sans modifier les permissions')
+    if 'permissions' in meta:owner_only(meta,meta['permissions'])
+
+
 class DriveStore:
     def __init__(self,binary,config):
         self.config=Path(config);self.binary=binary
         self.transport=RcloneTransfer(binary,REMOTE+':',config)
         self.transport.call('about',REMOTE+':','--json') # Rafraîchit OAuth avant les appels officiels.
         cfg=self.settings()
-        if cfg.get('type')!='drive' or cfg.get('scope')!='drive.file' or not cfg.get('root_folder_id'):
+        if cfg.get('type')!='drive' or cfg.get('scope')!='drive.file':
             raise RuntimeError('Remote Google dédié drive.file et dossier privé requis')
-        self.folder=cfg['root_folder_id'];self.private(self.folder,is_folder=True)
+        self.bind_folder();self.private(self.folder,is_folder=True)
 
     def settings(self):
         cfg=configparser.ConfigParser(interpolation=None);cfg.read(self.config,encoding='utf-8')
@@ -183,22 +224,53 @@ class DriveStore:
         token=json.loads(self.settings()['token'])['access_token']
         req=urllib.request.Request('https://www.googleapis.com/drive/v3/'+path,
               data=None if body is None else json.dumps(body).encode(),
-              headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'})
+              headers={'Authorization':'Bearer '+token,'Content-Type':'application/json','User-Agent':'SHENA-backup/1.0'})
         try:
             with urllib.request.build_opener(NoRedirect).open(req,timeout=60) as stream:return json.load(stream)
-        except urllib.error.HTTPError as e:raise RuntimeError('Google Drive refuse la requête HTTP '+str(e.code)) from None
+        except urllib.error.HTTPError as e:raise GoogleDriveError(e.code,google_operation(path,body),safe_google_reasons(e)) from None
 
     def private(self,file_id,is_folder=False):
         if not re.fullmatch(r'[A-Za-z0-9_-]+',file_id):raise ValueError('Identifiant Google non reconnu')
-        meta=self.api('files/'+file_id+'?fields=id,ownedByMe,trashed,driveId,mimeType,parents')
-        permissions=[];page=''
-        while True:
-            p=self.api('files/'+file_id+'/permissions?fields=permissions(type,role,deleted),nextPageToken'+('&pageToken='+urllib.parse.quote(page,safe='') if page else ''))
-            permissions+=p.get('permissions',[]);page=p.get('nextPageToken')
-            if not page:break
-        owner_only(meta,permissions)
+        # shared=false est l'indicateur officiel d'absence de partage My Drive.
+        # Ne pas exiger permissions.list avec le scope minimal drive.file.
+        meta=self.api('files/'+file_id+'?fields=id,ownedByMe,trashed,driveId,mimeType,parents,shared')
+        private_metadata(meta)
         if is_folder and meta.get('mimeType')!='application/vnd.google-apps.folder':raise RuntimeError('Dossier Google requis')
         return meta
+
+    def bind_folder(self,allow_create=False,preferred=None):
+        cfg=self.settings()
+        if cfg.get('type')!='drive' or cfg.get('scope')!='drive.file':raise RuntimeError('Remote Google dédié drive.file requis')
+        folder=cfg.get('root_folder_id')
+        if preferred and folder and preferred!=folder:raise RuntimeError('Un dossier est déjà lié : aucune substitution automatique')
+        if preferred and not folder:
+            self.private(preferred,is_folder=True)
+            folder=preferred
+            parser=configparser.ConfigParser(interpolation=None);parser.read(self.config,encoding='utf-8')
+            parser[REMOTE]['root_folder_id']=folder
+            with self.config.open('w',encoding='utf-8') as stream:parser.write(stream)
+            if not os.environ.get('SHENA_RCLONE_CONFIG_B64'):save_config(self.config.read_text(encoding='utf-8'))
+        if not folder:
+            query="name = 'SHENA encrypted backups' and mimeType = 'application/vnd.google-apps.folder' and trashed = false and 'me' in owners"
+            path='files?q='+urllib.parse.quote(query,safe='')+'&spaces=drive&fields=nextPageToken,files(id)'
+            folders=[];page=''
+            while True:
+                data=self.api(path+('&pageToken='+urllib.parse.quote(page,safe='') if page else ''))
+                folders.extend(data.get('files',[]));page=data.get('nextPageToken')
+                if not page:break
+            if len(folders)>1:raise RuntimeError('Plusieurs dossiers SHENA existent : indiquer -DriveFolderId ; aucun dossier créé ou modifié')
+            if folders:folder=folders[0]['id']
+            elif allow_create:folder=self.api('files?fields=id',{'name':'SHENA encrypted backups','mimeType':'application/vnd.google-apps.folder'})['id']
+            else:raise RuntimeError('Aucun dossier autorisé trouvé ; reprendre avec -AuthorizeDrive')
+            # Persister le contexte AVANT les contrôles : pas de dossier perdu
+            # ni de nouvelle création lors de la reprise d'un ancien 403.
+            parser=configparser.ConfigParser(interpolation=None);parser.read(self.config,encoding='utf-8')
+            parser[REMOTE]['root_folder_id']=folder
+            with self.config.open('w',encoding='utf-8') as stream:parser.write(stream)
+            if not os.environ.get('SHENA_RCLONE_CONFIG_B64'):save_config(self.config.read_text(encoding='utf-8'))
+        self.folder=folder
+        return folder
+
 
     def locate(self,key):
         self.transport.call('about',REMOTE+':','--json')
@@ -254,28 +326,33 @@ class DriveStore:
         self.transport.download(receipt['object_key'],target)
 
 
-def authorize(binary,config):
+def authorize(binary,config,allow_create=True,folder_id=None):
     if not sys.stdin.isatty():raise RuntimeError('Autorisation Google à faire sur votre ordinateur avec navigateur')
     LocalVault(create=True)
-    previous=None
+    previous=None;old_config=None
     if secret_get('rclone-count'):
-        old=configparser.ConfigParser(interpolation=None);old.read_string(load_config())
+        old_config=load_config()
+        old=configparser.ConfigParser(interpolation=None);old.read_string(old_config)
         previous=old[REMOTE].get('root_folder_id')
     print('Autorisez rclone dans le navigateur Google. Aucun code OAuth à envoyer dans le chat.')
-    result=subprocess.run([binary,'config','create',REMOTE,'drive','scope','drive.file','--config',str(config)],
+    if old_config:
+        old[REMOTE]['scope']='drive.file'
+        with open(config,'w',encoding='utf-8') as stream:old.write(stream)
+    command=[binary,'config','reconnect',REMOTE+':','--config',str(config)] if old_config else [binary,'config','create',REMOTE,'drive','scope','drive.file','--config',str(config)]
+    result=subprocess.run(command,
                           stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=600,env=rclone_environment())
     if result.returncode:raise RuntimeError('Autorisation Google non terminée ; aucun jeton affiché')
-    # Créer un dossier personnel neuf ; aucun ancien dossier n'est partagé/modifié.
-    temp=object.__new__(DriveStore);temp.config=Path(config);temp.binary=binary
     if previous:
-        temp.private(previous,is_folder=True)
-        folder=previous
-    else:folder=temp.api('files?fields=id',{'name':'SHENA encrypted backups','mimeType':'application/vnd.google-apps.folder'})['id']
-    result=subprocess.run([binary,'config','update',REMOTE,'root_folder_id',folder,'--config',str(config)],stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=rclone_environment())
-    if result.returncode:raise RuntimeError('Configuration du dossier privé échouée')
+        parser=configparser.ConfigParser(interpolation=None);parser.read(config,encoding='utf-8')
+        parser[REMOTE]['root_folder_id']=previous
+        with open(config,'w',encoding='utf-8') as stream:parser.write(stream)
+    # Ne plus perdre OAuth/le dossier existant si un contrôle Google échoue.
+    save_config(Path(config).read_text(encoding='utf-8'))
+    temp=object.__new__(DriveStore);temp.config=Path(config);temp.binary=binary
+    temp.bind_folder(allow_create=allow_create,preferred=folder_id)
     DriveStore(binary,config)
-    save_config(Path(config).read_text())
-    print('Google Drive autorisé ; dossier privé créé, clé conservée dans le coffre OS.')
+    save_config(Path(config).read_text(encoding='utf-8'))
+    print('Google Drive autorisé ; dossier privé conservé, clé inchangée dans le coffre OS.')
 
 
 def configure_github(config,operator_token):
@@ -309,3 +386,28 @@ def configure_github(config,operator_token):
     commit=gh(base+'git/commits',{'message':'SHENA private backup [shena-backup-run]','tree':tree,'parents':[head]},'POST')
     gh(base+'git/refs/'+ref,{'sha':commit['sha'],'force':False},'PATCH')
     print('Secrets Actions chiffrés configurés et sauvegarde déclenchée ; aucune valeur publiée.')
+
+
+def diagnose_drive(binary,config):
+    """GET uniquement : ni création Google ni requête Supabase."""
+    temp=object.__new__(DriveStore);temp.config=Path(config);temp.binary=binary
+    temp.transport=RcloneTransfer(binary,REMOTE+':',config)
+    temp.transport.call('about',REMOTE+':','--json')
+    folder=temp.bind_folder(allow_create=False)
+    requests=[('files.get.metadata','files/'+folder+'?fields=id,ownedByMe,trashed,driveId,mimeType,parents'),
+              ('permissions.list','files/'+folder+'/permissions?fields=permissions(type,role,deleted),nextPageToken'),
+              ('files.get.private','files/'+folder+'?fields=id,ownedByMe,trashed,driveId,mimeType,parents,shared')]
+    for label,path in requests:
+        try:
+            meta=temp.api(path)
+            if label=='files.get.private':private_metadata(meta)
+            print(json.dumps({'request':label,'http':200,'reason':None}))
+        except GoogleDriveError as error:
+            print(json.dumps({'request':label,'http':error.status,'reason':','.join(error.reasons)}))
+    temp.private(folder,is_folder=True)
+    print('Confidentialité vérifiée ; aucun dossier ou fichier supprimé, partagé ou déplacé.')
+
+
+def select_existing_folder(binary,config,folder_id):
+    temp=object.__new__(DriveStore);temp.config=Path(config);temp.binary=binary
+    temp.bind_folder(allow_create=False,preferred=folder_id)

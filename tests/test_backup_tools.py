@@ -191,6 +191,122 @@ class BackupTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):drive.ensure_rclone(Path(folder)/'invalid')
             self.assertFalse((Path(folder)/'invalid'/binary_name).exists())
 
+    def test_google_error_reports_only_request_and_reason(self):
+        from urllib.error import HTTPError
+        import types
+        store=object.__new__(drive.DriveStore)
+        store.settings=lambda:{'token':json.dumps({'access_token':'SENSITIVE_OAUTH_VALUE'})}
+        body={'error':{'message':'private@example.test SENSITIVE_OAUTH_VALUE SECRET_FILE_ID',
+             'errors':[{'reason':'insufficientPermissions','message':'PRIVATE_BODY'}],
+             'details':[{'reason':'ACCESS_TOKEN_SCOPE_INSUFFICIENT','metadata':{'consumer':'PRIVATE_PROJECT'}}]}}
+        def fail(req,timeout=None):
+            self.assertEqual(req.get_header('Authorization'),'Bearer SENSITIVE_OAUTH_VALUE')
+            raise HTTPError(req.full_url,403,'PRIVATE_MESSAGE',{},io.BytesIO(json.dumps(body).encode()))
+        with patch.object(drive.urllib.request,'build_opener',return_value=types.SimpleNamespace(open=fail)):
+            with self.assertRaises(drive.GoogleDriveError) as caught:store.api('files/SECRET_FILE_ID/permissions?pageToken=PRIVATE_PAGE')
+        error=caught.exception
+        self.assertEqual(error.status,403);self.assertEqual(error.operation,'permissions.list')
+        self.assertIn('insufficientPermissions',error.reasons)
+        for private in ('SENSITIVE_OAUTH_VALUE','PRIVATE_BODY','SECRET_FILE_ID','PRIVATE_PAGE','private@example.test','PRIVATE_PROJECT'):
+            self.assertNotIn(private,str(error));self.assertNotIn(private,repr(error))
+        self.assertEqual(drive.GoogleDriveError(403,'files.get',['SENSITIVE_OAUTH_VALUE']).reasons,('unknown',))
+
+    def test_minimal_scope_privacy_uses_files_get_not_permissions_list(self):
+        store=object.__new__(drive.DriveStore);calls=[]
+        meta={'id':'EXISTING_ROOT','ownedByMe':True,'trashed':False,'shared':False,'mimeType':'application/vnd.google-apps.folder'}
+        def api(path,body=None):
+            calls.append(path)
+            if '/permissions' in path:raise drive.GoogleDriveError(403,'permissions.list',['insufficientPermissions'])
+            return meta
+        store.api=api
+        self.assertEqual(store.private('EXISTING_ROOT',is_folder=True)['id'],'EXISTING_ROOT')
+        self.assertEqual(len(calls),1);self.assertIn('shared',calls[0]);self.assertNotIn('/permissions',calls[0])
+        for key,value in [('shared',True),('shared',None),('ownedByMe',False),('driveId','SHARED_DRIVE'),('trashed',True)]:
+            invalid=dict(meta);invalid[key]=value
+            with self.assertRaises(RuntimeError):drive.private_metadata(invalid)
+        unknown=dict(meta);unknown.pop('shared')
+        with self.assertRaises(RuntimeError):drive.private_metadata(unknown)
+        with self.assertRaises(RuntimeError):drive.private_metadata(dict(meta,permissions=[{'type':'anyone','role':'reader'}]))
+
+    def test_recover_previous_folder_and_keep_configuration_after_403(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'rclone.conf'
+            path.write_text('[shena-drive]\ntype = drive\nscope = drive.file\ntoken = {"access_token":"SYNTHETIC"}\n')
+            store=object.__new__(drive.DriveStore);store.config=path;calls=[]
+            def api(route,body=None):
+                calls.append((route,body))
+                if route.startswith('files?'):return {'files':[{'id':'ROOT_CREATED_BEFORE_403'}]}
+                raise drive.GoogleDriveError(403,'files.get',['insufficientPermissions'])
+            store.api=api
+            with patch.object(drive,'save_config') as saved:
+                self.assertEqual(store.bind_folder(allow_create=True),'ROOT_CREATED_BEFORE_403')
+                self.assertTrue(saved.called)
+                self.assertIn('ROOT_CREATED_BEFORE_403',path.read_text())
+                with self.assertRaises(drive.GoogleDriveError):store.private(store.folder,is_folder=True)
+            self.assertTrue(all(body is None for route,body in calls))
+            self.assertEqual(store.bind_folder(),'ROOT_CREATED_BEFORE_403')
+
+    def test_existing_vault_master_is_never_regenerated_on_reauthorization(self):
+        import base64
+        with patch.dict(os.environ,{},clear=True),patch.object(drive,'secret_get',return_value=base64.b64encode(b'x'*32).decode()),patch.object(drive,'secret_set') as save,patch.object(drive.secrets,'token_bytes',side_effect=AssertionError('No key rotation')):
+            first=drive.LocalVault(create=True);second=drive.LocalVault(create=True)
+            self.assertEqual(first.master,second.master)
+            self.assertEqual(first.key_id,second.key_id)
+            save.assert_not_called()
+
+    def test_reauthorization_preserves_folder_client_and_master_key(self):
+        import types,contextlib
+        previous='[shena-drive]\ntype = drive\nscope = drive.file\nroot_folder_id = EXISTING_ROOT\nclient_id = ORIGINAL_CLIENT\nclient_secret = ORIGINAL_CLIENT_SECRET\ntoken = {"access_token":"OLD_SYNTHETIC"}\n'
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'rclone.conf'
+            def reconnect(args,**kwargs):
+                self.assertIn('reconnect',args)
+                self.assertIn('ORIGINAL_CLIENT',path.read_text())
+                path.write_text(path.read_text().replace('OLD_SYNTHETIC','NEW_SYNTHETIC'))
+                return types.SimpleNamespace(returncode=0)
+            with patch.object(drive.sys.stdin,'isatty',return_value=True),patch.object(drive,'LocalVault') as vault,patch.object(drive,'secret_get',return_value='1'),patch.object(drive,'load_config',return_value=previous),patch.object(drive.subprocess,'run',side_effect=reconnect),patch.object(drive,'save_config') as saved,contextlib.redirect_stdout(io.StringIO()):
+                # Le contrôle réel est simulé après bind_folder pour cet échec.
+                with patch.object(drive.DriveStore,'__init__',side_effect=drive.GoogleDriveError(403,'files.get',['appNotAuthorizedToFile'])):
+                    with self.assertRaises(drive.GoogleDriveError):drive.authorize('rclone',path,allow_create=False)
+                vault.assert_called_once_with(create=True)
+                self.assertIn('EXISTING_ROOT',saved.call_args.args[0])
+                self.assertIn('ORIGINAL_CLIENT_SECRET',saved.call_args.args[0])
+                self.assertIn('scope = drive.file',saved.call_args.args[0])
+                self.assertIn('NEW_SYNTHETIC',saved.call_args.args[0])
+
+    def test_existing_backup_can_still_be_downloaded_without_permissions_list(self):
+        import types
+        with tempfile.TemporaryDirectory() as folder:
+            config=Path(folder)/'rclone.conf'
+            config.write_text('[shena-drive]\ntype = drive\nscope = drive.file\nroot_folder_id = ROOT\ntoken = {"access_token":"SYNTHETIC"}\n')
+            calls=[]
+            def api(store,path,body=None):
+                self.assertIsNone(body);self.assertNotIn('/permissions',path);calls.append(path)
+                key=path.split('/')[1].split('?')[0]
+                parents={'ROOT':[],'CHILD':['ROOT'],'ARCHIVE':['CHILD']}
+                return {'id':key,'ownedByMe':True,'trashed':False,'shared':False,'parents':parents[key],'mimeType':'application/octet-stream' if key=='ARCHIVE' else 'application/vnd.google-apps.folder'}
+            with patch.object(drive.DriveStore,'api',api),patch.object(drive.RcloneTransfer,'call',side_effect=lambda *args,**kwargs: b'{"ID":"ARCHIVE"}' if args[0]=='lsjson' else b'{}'),patch.object(drive.RcloneTransfer,'download',side_effect=lambda key,p:Path(p).write_bytes(b'EXISTING ENCRYPTED BACKUP')):
+                store=drive.DriveStore('rclone',config)
+                target=Path(folder)/'restored'
+                store.download({'drive_folder_id':'ROOT','drive_file_id':'ARCHIVE','drive_backup_folder_id':'CHILD','object_key':'a'*32+'/backup.shena'},target)
+                self.assertEqual(target.read_bytes(),b'EXISTING ENCRYPTED BACKUP')
+            self.assertEqual(drive.google_operation('files/ARCHIVE?fields=shared'),'files.get')
+            self.assertTrue(all('/permissions' not in p for p in calls))
+
+    def test_drive_diagnostic_logs_safe_reason_and_uses_no_write(self):
+        import contextlib
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'rclone.conf';path.write_text('[shena-drive]\ntype = drive\nscope = drive.file\nroot_folder_id = PRIVATE_ID\ntoken = {}\n')
+            def api(store,route,body=None):
+                self.assertIsNone(body)
+                if '/permissions' in route:raise drive.GoogleDriveError(403,'permissions.list',['insufficientPermissions'])
+                return {'id':'PRIVATE_ID','ownedByMe':True,'trashed':False,'shared':False,'mimeType':'application/vnd.google-apps.folder'}
+            output=io.StringIO()
+            with patch.object(drive.RcloneTransfer,'call',return_value=b'{}'),patch.object(drive.DriveStore,'api',api),contextlib.redirect_stdout(output):drive.diagnose_drive('rclone',path)
+            log=output.getvalue()
+            self.assertIn('"request": "permissions.list", "http": 403, "reason": "insufficientPermissions"',log)
+            self.assertNotIn('PRIVATE_ID',log);self.assertNotIn('token',log)
+
     def test_no_production_migration_or_automatic_attestation(self):
         source=(ROOT/'scripts/backup/shena_backup.py').read_text()
         self.assertNotIn('backup_restore_verified',source)

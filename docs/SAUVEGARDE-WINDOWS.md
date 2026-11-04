@@ -71,3 +71,37 @@ L'intégration GitHub actuellement accessible depuis Codex a refusé la gestion 
 Aucun outil de cette procédure n'exécute une migration, ne fusionne une PR, ne publie Vercel et n'active une commande, un paiement ou un téléchargement. Le rapport conserve `migration_gate_open=false` et distingue `database_restore_verified`, `storage_bytes_restore_verified` et `storage_service_restore_verified` (ce dernier reste faux tant que le service Supabase Storage isolé et ses JWT/RLS ne sont pas réellement testés). Les clés externes/Vault et les appartenances système exigent aussi examen. Un reçu ou une CI sur données synthétiques ne prouve pas une restauration Production.
 
 L'autorisation Google n'a pas encore été accordée dans cette session : aucun transfert réel vers votre Drive ni sauvegarde Production n'est certifié. Après une exécution réelle, les preuves seront examinées et les tests du service isolé complétés avant de reprendre les migrations déjà autorisées, avec empreintes inchangées. Une modification de script SQL exigera la revue supplémentaire déjà prévue.
+
+## Reprendre un HTTP 403 après une autorisation déjà réussie
+
+L'ancienne erreur supprimait l'opération et le `reason` Google. On ne peut donc pas déduire de ce seul message si l'échec concernait `files.get`, `permissions.list`, un quota ou une politique du compte. Aucun reason n'a été relevé sur votre ordinateur par les tests du dépôt.
+
+Le correctif ne dépend plus de `permissions.list` pour autoriser une sauvegarde : il demande avec `files.get` les indicateurs officiels `ownedByMe=true`, `shared=false`, `trashed=false`, et refuse Shared Drives et tout état absent/incohérent. Une éventuelle ACL retournée contradictoire est également refusée. Le scope reste strictement `drive.file` ; aucune permission Google n'est créée/modifiée/supprimée.
+
+Le nouveau diagnostic, en lecture seule, teste séparément l'ancien GET de métadonnées, l'ancien `permissions.list`, puis le nouveau GET incluant `shared`. Il affiche uniquement un nom d'opération, le statut HTTP et un code `reason` reconnu, jamais le corps d'erreur, son message, une URL, un identifiant de fichier, un email ou un jeton. Un code inconnu devient `unknown` plutôt que de risquer de publier une valeur libre. Le diagnostic n'appelle pas Supabase et ne lance aucun dump.
+
+Depuis le dossier du dépôt :
+
+```powershell
+git fetch origin feat/shena-production-activation
+if ($LASTEXITCODE -ne 0) { throw 'Git fetch a echoue' }
+git switch feat/shena-production-activation
+if ($LASTEXITCODE -ne 0) { throw 'Git switch a echoue' }
+git pull --ff-only origin feat/shena-production-activation
+if ($LASTEXITCODE -ne 0) { throw 'Git pull a echoue' }
+.\scripts\backup\Backup-SHENA.ps1 -DiagnoseDrive
+.\scripts\backup\Backup-SHENA.ps1
+```
+
+Le pull est fast-forward uniquement : aucune réinitialisation ou suppression de modifications locales. Un 403 de l'ancien `permissions.list` est affiché, mais ne bloque plus le nouveau contrôle si Google confirme explicitement l'absence de partage. Tout échec du nouveau contrôle interdit encore la sauvegarde.
+
+Si l'ancienne version avait créé le dossier **sans enregistrer OAuth au coffre avant son échec**, le diagnostic indique « Autorisation Google initiale nécessaire ». Reprendre alors une seule fois avec :
+
+```powershell
+.\scripts\backup\Backup-SHENA.ps1 -AuthorizeDrive -DiagnoseDrive
+.\scripts\backup\Backup-SHENA.ps1
+```
+
+Cette combinaison ne crée aucun dossier. Elle retrouve le dossier existant avec le même client OAuth, conserve son identifiant et la clé existante, puis teste les métadonnées en lecture seule. Une ancienne configuration personnalisée garde aussi son client_id/client_secret ; elle n'est pas remplacée par le client partagé de rclone. OAuth et l'identifiant du dossier sont désormais conservés même en cas de nouveau 403. Si plusieurs dossiers homonymes existent sans identifiant enregistré, l'outil refuse de choisir arbitrairement ou d'en créer un autre ; aucun dossier ni sauvegarde n'est déplacé ou supprimé. Dans ce seul cas, ajouter `-DriveFolderId IDENTIFIANT_DU_DOSSIER_EXISTANT` pour lier explicitement le dossier choisi depuis son URL Google. L'outil vérifie d'abord qu'il vous appartient et n'est pas partagé ; il refuse de remplacer une racine déjà enregistrée par un autre identifiant.
+
+Les tests de non-régression simulent un `permissions.list` en 403 et vérifient que le fichier existant reste téléchargeable via le même identifiant et que la clé n'est pas régénérée. Ils ne prouvent pas l'accès actuel à votre compte Drive : ce point est confirmé par l'exécution locale du diagnostic puis la restauration réelle. Aucun script SQL Production n'est exécuté par cette réparation.

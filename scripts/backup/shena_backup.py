@@ -19,7 +19,7 @@ import uuid
 from datetime import datetime, timezone
 import psycopg
 from psycopg import sql
-from drive import LocalVault, DriveStore, ensure_rclone, load_config, save_config, authorize, configure_github, secret_get, secret_set
+from drive import LocalVault, DriveStore, ensure_rclone, load_config, save_config, authorize, configure_github, secret_get, secret_set, diagnose_drive, select_existing_folder
 from core import REF, REPO, CHUNK, checked, digest, private_directory, encrypt_file, decrypt_file, extract_verified, restore_database, catalog_query, table_hash_query
 
 API = 'https://api.supabase.com/v1/projects/' + REF
@@ -257,9 +257,14 @@ def execute(a):
     with tempfile.TemporaryDirectory(prefix='access-',dir=root) as folder:
         access=private_directory(folder);config=access/'rclone.conf'
         if a.authorize_drive:
-            authorize(binary,config)
-        else:config.write_text(load_config())
+            authorize(binary,config,allow_create=not a.diagnose_drive,folder_id=a.drive_folder_id)
+        else:
+            config.write_text(load_config())
+            if a.drive_folder_id:select_existing_folder(binary,config,a.drive_folder_id)
         try:
+            if a.diagnose_drive:
+                diagnose_drive(binary,config)
+                return
             if a.configure_github:
                 token=operator_token()
                 configure_github(config,token)
@@ -353,6 +358,8 @@ def main():
     parser.add_argument('--authorize-drive',action='store_true')
     parser.add_argument('--configure-github',action='store_true')
     parser.add_argument('--test-connections',action='store_true')
+    parser.add_argument('--diagnose-drive',action='store_true')
+    parser.add_argument('--drive-folder-id',help='Dossier privé existant à lier uniquement si aucune racine n’est enregistrée')
     parser.add_argument('--restore-receipt',type=Path)
     parser.add_argument('--restore-latest',action='store_true')
     parser.add_argument('--restore-image',help='Image Supabase PostgreSQL compatible ; empreinte résolue et enregistrée')

@@ -1,12 +1,14 @@
 ﻿# Windows PowerShell 5.1 / PowerShell 7. Aucun secret en argument ou dans Git.
 [CmdletBinding()]
 param(
+  [string]$DriveFolderId,
   [string]$RestoreImage,
   [string]$RestoreReceipt,
   [string]$OutputDirectory,
   [switch]$AuthorizeDrive,
   [switch]$ConfigureGitHub,
   [switch]$TestConnections,
+  [switch]$DiagnoseDrive,
   [switch]$RestoreLatest,
   [switch]$ShowHelp
 )
@@ -30,12 +32,13 @@ if ($LASTEXITCODE -ne 0) { throw 'Installation des dépendances impossible ; ne 
 $pgBin = Join-Path $env:ProgramFiles 'PostgreSQL\17\bin'
 if (Test-Path $pgBin) { $env:PATH = "$pgBin;$env:PATH" }
 $arguments = @((Join-Path $PSScriptRoot 'shena_backup.py'))
-foreach ($pair in @(@('--restore-image',$RestoreImage), @('--restore-receipt',$RestoreReceipt), @('--output',$OutputDirectory))) {
+foreach ($pair in @(@('--drive-folder-id',$DriveFolderId), @('--restore-image',$RestoreImage), @('--restore-receipt',$RestoreReceipt), @('--output',$OutputDirectory))) {
   if ($pair[1]) { $arguments += @($pair[0],$pair[1]) }
 }
 if ($AuthorizeDrive) { $arguments += '--authorize-drive' }
 if ($ConfigureGitHub) { $arguments += '--configure-github' }
 if ($TestConnections) { $arguments += '--test-connections' }
+if ($DiagnoseDrive) { $arguments += '--diagnose-drive' }
 if ($RestoreLatest) { $arguments += '--restore-latest' }
 if ($ShowHelp) { $arguments += '--help' }
 & $python @arguments
