@@ -254,6 +254,22 @@ class BackupTests(unittest.TestCase):
             self.assertEqual(first.key_id,second.key_id)
             save.assert_not_called()
 
+    def test_explicit_existing_folder_never_replaces_an_already_bound_root(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'rclone.conf'
+            base='[shena-drive]\ntype = drive\nscope = drive.file\ntoken = {}\n'
+            path.write_text(base+'root_folder_id = ORIGINAL_ROOT\n')
+            store=object.__new__(drive.DriveStore);store.config=path
+            with patch.object(store,'api') as api:
+                with self.assertRaises(RuntimeError):store.bind_folder(preferred='OTHER_ROOT')
+                api.assert_not_called()
+                self.assertIn('ORIGINAL_ROOT',path.read_text())
+            path.write_text(base)
+            with patch.object(store,'api',return_value={'ownedByMe':True,'trashed':False,'shared':False,'mimeType':'application/vnd.google-apps.folder'}) as api,patch.object(drive,'save_config'):
+                self.assertEqual(store.bind_folder(preferred='ORIGINAL_ROOT'),'ORIGINAL_ROOT')
+                self.assertTrue(all(call.args[0].startswith('files/ORIGINAL_ROOT?') for call in api.call_args_list))
+                self.assertIn('ORIGINAL_ROOT',path.read_text())
+
     def test_reauthorization_preserves_folder_client_and_master_key(self):
         import types,contextlib
         previous='[shena-drive]\ntype = drive\nscope = drive.file\nroot_folder_id = EXISTING_ROOT\nclient_id = ORIGINAL_CLIENT\nclient_secret = ORIGINAL_CLIENT_SECRET\ntoken = {"access_token":"OLD_SYNTHETIC"}\n'
@@ -302,7 +318,7 @@ class BackupTests(unittest.TestCase):
                 if '/permissions' in route:raise drive.GoogleDriveError(403,'permissions.list',['insufficientPermissions'])
                 return {'id':'PRIVATE_ID','ownedByMe':True,'trashed':False,'shared':False,'mimeType':'application/vnd.google-apps.folder'}
             output=io.StringIO()
-            with patch.object(drive.RcloneTransfer,'call',return_value=b'{}'),patch.object(drive.DriveStore,'api',api),contextlib.redirect_stdout(output):drive.diagnose_drive('rclone',path)
+            with patch.object(drive.RcloneTransfer,'call',side_effect=RuntimeError('Synthetic rclone startup denied')),patch.object(drive.DriveStore,'api',api),contextlib.redirect_stdout(output):drive.diagnose_drive('rclone',path)
             log=output.getvalue()
             self.assertIn('"request": "permissions.list", "http": 403, "reason": "insufficientPermissions"',log)
             self.assertNotIn('PRIVATE_ID',log);self.assertNotIn('token',log)

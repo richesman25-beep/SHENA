@@ -392,7 +392,11 @@ def diagnose_drive(binary,config):
     """GET uniquement : ni création Google ni requête Supabase."""
     temp=object.__new__(DriveStore);temp.config=Path(config);temp.binary=binary
     temp.transport=RcloneTransfer(binary,REMOTE+':',config)
-    temp.transport.call('about',REMOTE+':','--json')
+    try:temp.transport.call('about',REMOTE+':','--json')
+    except RuntimeError:
+        # Même si rclone n'initialise pas la racine, relever le reason par nos
+        # GET contrôlés. Aucun échec d'auth n'ouvre le contrôle de confidentialité.
+        pass
     folder=temp.bind_folder(allow_create=False)
     requests=[('files.get.metadata','files/'+folder+'?fields=id,ownedByMe,trashed,driveId,mimeType,parents'),
               ('permissions.list','files/'+folder+'/permissions?fields=permissions(type,role,deleted),nextPageToken'),
